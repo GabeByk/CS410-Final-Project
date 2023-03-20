@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  CS410 Final Project
 //
-//  Created by Gabe on 3/20/23.
+//  Created by Gabe Byk on 3/20/23.
 //
 
 import SwiftUI
