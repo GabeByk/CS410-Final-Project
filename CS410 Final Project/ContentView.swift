@@ -6,21 +6,18 @@
 //
 
 import SwiftUI
+import IdentifiedCollections
 
 struct ContentView: View {
+    @ObservedObject var app: AppModel
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundColor(.accentColor)
-            Text("Hello, world!")
-        }
-        .padding()
+        EditDatabases(model: EditDatabasesModel(parentModel: app))
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContentView(app: AppModel())
     }
 }
