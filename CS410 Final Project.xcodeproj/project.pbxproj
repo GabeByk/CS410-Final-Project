@@ -13,7 +13,7 @@
 		00203CEB29C8F68C00AC0240 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00203CEA29C8F68C00AC0240 /* Preview Assets.xcassets */; };
 		00203CF329C8F7D100AC0240 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 00203CF229C8F7D100AC0240 /* GRDB */; };
 		00348C1929CA00EB00B3E4B2 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00348C1829CA00EB00B3E4B2 /* AppModel.swift */; };
-		00348C1B29CA01A400B3E4B2 /* Database.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00348C1A29CA01A400B3E4B2 /* Database.swift */; };
+		00348C1B29CA01A400B3E4B2 /* DataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00348C1A29CA01A400B3E4B2 /* DataModels.swift */; };
 		00348C1E29CA02CA00B3E4B2 /* IdentifiedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 00348C1D29CA02CA00B3E4B2 /* IdentifiedCollections */; };
 		00348C2129CA02DD00B3E4B2 /* Tagged in Frameworks */ = {isa = PBXBuildFile; productRef = 00348C2029CA02DD00B3E4B2 /* Tagged */; };
 		00348C2329CA0A4600B3E4B2 /* DatabasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */; };
@@ -27,7 +27,7 @@
 		00203CE729C8F68C00AC0240 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		00203CEA29C8F68C00AC0240 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		00348C1829CA00EB00B3E4B2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
-		00348C1A29CA01A400B3E4B2 /* Database.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Database.swift; sourceTree = "<group>"; };
+		00348C1A29CA01A400B3E4B2 /* DataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataModels.swift; sourceTree = "<group>"; };
 		00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabasesView.swift; sourceTree = "<group>"; };
 		00348C2429CA16A300B3E4B2 /* DatabaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -70,7 +70,7 @@
 				00203CE729C8F68C00AC0240 /* Assets.xcassets */,
 				00203CE929C8F68C00AC0240 /* Preview Content */,
 				00348C1829CA00EB00B3E4B2 /* AppModel.swift */,
-				00348C1A29CA01A400B3E4B2 /* Database.swift */,
+				00348C1A29CA01A400B3E4B2 /* DataModels.swift */,
 				00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */,
 				00348C2429CA16A300B3E4B2 /* DatabaseView.swift */,
 			);
@@ -168,7 +168,7 @@
 				00203CE629C8F68A00AC0240 /* ContentView.swift in Sources */,
 				00348C2529CA16A300B3E4B2 /* DatabaseView.swift in Sources */,
 				00348C1929CA00EB00B3E4B2 /* AppModel.swift in Sources */,
-				00348C1B29CA01A400B3E4B2 /* Database.swift in Sources */,
+				00348C1B29CA01A400B3E4B2 /* DataModels.swift in Sources */,
 				00203CE429C8F68A00AC0240 /* CS410_Final_ProjectApp.swift in Sources */,
 				00348C2329CA0A4600B3E4B2 /* DatabasesView.swift in Sources */,
 			);
