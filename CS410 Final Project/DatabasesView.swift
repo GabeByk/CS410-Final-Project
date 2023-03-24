@@ -16,7 +16,7 @@ class ViewModel: ObservableObject {
         self.isEditing = isEditing
     }
     
-    // needed for ModelDrivenView's default implementations
+    // needed for ModelDrivenView
     @Published var isEditing: Bool
     func cancelButtonPressed() {
         print("Cancel")
@@ -27,7 +27,7 @@ class ViewModel: ObservableObject {
 }
 
 extension ViewModel: Equatable, Hashable {
-    // default implementations
+    // default implementations for equatable and hashable conformance
     nonisolated static func == (lhs: ViewModel, rhs: ViewModel) -> Bool {
         return lhs === rhs
     }
@@ -37,51 +37,51 @@ extension ViewModel: Equatable, Hashable {
     }
 }
 
-@MainActor
-class ModelDrivenView<ModelType: ViewModel> {
-    @ObservedObject var model: ModelType
+struct ModelDrivenView: View {
+    let editingView: () -> any View
+    let nonEditingView: () -> any View
+    @ObservedObject var model: ViewModel
     
-    init(model: ModelType) {
+    init(model: ViewModel, editingView: @escaping () -> some View, nonEditingView: @escaping () -> some View) {
         self.model = model
+        self.editingView = editingView
+        self.nonEditingView = nonEditingView
     }
     
-    @ViewBuilder var editAndCancelButtons: some View {
-        HStack {
-            if model.isEditing {
-                Button("Cancel") {
-                    self.model.cancelButtonPressed()
-                }
-                .tint(.red)
-                .padding(.horizontal, 20)
-            }
-            Spacer()
-            Button(model.isEditing ? "Done" : "Edit") {
-                self.model.editButtonPressed()
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    @ViewBuilder var body: some View {
+    var body: some View {
         VStack {
-            editAndCancelButtons
-            // this syntax would be great:
-            // model.isEditing ? editingView : navigatingView
             if model.isEditing {
-                editingView()
+                // https://www.swiftbysundell.com/articles/opaque-return-types-in-swift/
+                AnyView(editingView())
+                    .navigationBarBackButtonHidden()
             }
             else {
-                navigatingView()
+                AnyView(nonEditingView())
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                editButton
+            }
+            if model.isEditing {
+                ToolbarItem(placement: .cancellationAction) {
+                    cancelButton
+                }
             }
         }
     }
     
-    @ViewBuilder func editingView() -> some View {
-        Text("Editing")
+    var editButton: some View {
+        Button(model.isEditing ? "Done" : "Edit") {
+            model.editButtonPressed()
+        }
     }
     
-    @ViewBuilder func navigatingView() -> some View {
-        Text("Navigating")
+    var cancelButton: some View {
+        Button("Cancel", role: .cancel) {
+            model.cancelButtonPressed()
+        }
+        .tint(.red)
     }
 }
 
@@ -134,11 +134,22 @@ final class EditDatabasesModel: ViewModel, DatabaseSaver {
     }
 }
 
-@MainActor
-// Fatal error: views must be value types (either a struct or an enum); EditDatabases is a class.
-// structs can't inherit from anything but a protocol, so ModelDrivenView must be a protocol
-final class EditDatabases: ModelDrivenView<EditDatabasesModel>, View {
-    func editingView() -> some View {
+struct EditDatabases: View {
+    @ObservedObject var model: EditDatabasesModel
+    
+    var body: some View {
+        ModelDrivenView(model: model) {
+            editingView
+        } nonEditingView: {
+            navigatingView
+        }
+    }
+    
+    func removeDatabases(at offsets: IndexSet) {
+        model.removeDatabases(at: offsets)
+    }
+    
+    var editingView: some View {
         Form {
             Section("Databases") {
                 ForEach($model.draftDatabases) { $database in
@@ -152,7 +163,7 @@ final class EditDatabases: ModelDrivenView<EditDatabasesModel>, View {
         }
     }
     
-    func navigatingView() -> some View {
+    var navigatingView: some View {
         List {
             Section("Databases") {
                 ForEach(model.databases) { database in
@@ -165,10 +176,6 @@ final class EditDatabases: ModelDrivenView<EditDatabasesModel>, View {
                 }
             }
         }
-    }
-    
-    func removeDatabases(at offsets: IndexSet) {
-        model.removeDatabases(at: offsets)
     }
 }
 

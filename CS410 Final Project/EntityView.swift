@@ -57,32 +57,10 @@ struct EditEntity: View {
     @ObservedObject var model: EditEntityModel
 
     var body: some View {
-        VStack {
-            editAndCancelButtons
-            if model.isEditing {
-                editingView
-            }
-            else {
-                navigatingView
-            }
-        }
-    }
-    
-    var editAndCancelButtons: some View {
-        HStack {
-            if model.isEditing {
-                Button("Cancel") {
-                    model.cancelButtonPressed()
-                }
-                .tint(.red)
-                .padding(.horizontal, 20)
-            }
-            Spacer()
-            Button(model.isEditing ? "Done" : "Edit") {
-                model.editButtonPressed()
-            }
-//            .disabled(model.isEditing && !model.draftEntity.hasValidPrimaryKey())
-            .padding(.horizontal, 20)
+        ModelDrivenView(model: model) {
+            editingView
+        } nonEditingView: {
+            navigatingView
         }
     }
     
@@ -139,10 +117,11 @@ struct EditEntity: View {
             }
         }
     }
-    
-    func primaryKeyImage(isPrimary: Bool) -> Image {
-        Image(systemName: isPrimary ? "key.fill" : "key")
-    }
+}
+
+// this should maybe be a static member of the class
+func primaryKeyImage(isPrimary: Bool) -> Image {
+    Image(systemName: isPrimary ? "key.fill" : "key")
 }
 
 struct EditEntity_Previews: PreviewProvider {

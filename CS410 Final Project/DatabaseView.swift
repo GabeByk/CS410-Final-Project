@@ -63,33 +63,10 @@ struct EditDatabase: View {
     @ObservedObject var model: EditDatabaseModel
     
     var body: some View {
-        VStack {
-            editAndCancelButtons
-            // this syntax would be great:
-            // model.isEditing ? editingView : navigatingView
-            if model.isEditing {
-                editingView
-            }
-            else {
-                navigatingView
-            }
-        }
-    }
-    
-    var editAndCancelButtons: some View {
-        HStack {
-            if model.isEditing {
-                Button("Cancel") {
-                    model.cancelButtonPressed()
-                }
-                .tint(.red)
-                .padding(.horizontal, 20)
-            }
-            Spacer()
-            Button(model.isEditing ? "Done" : "Edit") {
-                model.editButtonPressed()
-            }
-            .padding(.horizontal, 20)
+        ModelDrivenView(model: model) {
+            editingView
+        } nonEditingView: {
+            navigatingView
         }
     }
     
