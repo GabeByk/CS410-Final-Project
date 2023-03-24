@@ -10,17 +10,25 @@ import IdentifiedCollections
 import SwiftUI
 
 @MainActor
-protocol ViewModel: ObservableObject, Equatable, Hashable {
-    // needed for ModelDrivenView
-    var isEditing: Bool { get set }
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool
-    nonisolated func hash(into hasher: inout Hasher)
-    func cancelButtonPressed()
-    func editButtonPressed()
+class ViewModel: ObservableObject {
+    
+    init(isEditing: Bool = false) {
+        self.isEditing = isEditing
+    }
+    
+    // needed for ModelDrivenView's default implementations
+    @Published var isEditing: Bool
+    func cancelButtonPressed() {
+        print("Cancel")
+    }
+    func editButtonPressed() {
+        print("Edit")
+    }
 }
 
-extension ViewModel {
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+extension ViewModel: Equatable, Hashable {
+    // default implementations
+    nonisolated static func == (lhs: ViewModel, rhs: ViewModel) -> Bool {
         return lhs === rhs
     }
     
@@ -29,50 +37,53 @@ extension ViewModel {
     }
 }
 
-// TODO: ask Dr. Reed how to make this work
-// goal: anything that's a ModelDrivenView automatically gets editAndCancelButtons and a body, but must implement editingView and navigatingView.
-
-//@MainActor
-//protocol ModelDrivenView: View {
-//    var model: any ViewModel { get }
-//    @ViewBuilder var editAndCancelButtons: any View { get }
-//    @ViewBuilder var editingView: any View { get }
-//    @ViewBuilder var navigatingView: any View { get }
-//}
-//
-//extension ModelDrivenView {
-//    // https://docs.swift.org/swift-book/documentation/the-swift-programming-language/protocols/
-//    var editAndCancelButtons: some View {
-//        HStack {
-//            if model.isEditing {
-//                Button("Cancel") {
-//                    model.cancelButtonPressed()
-//                }
-//                .tint(.red)
-//                .padding(.horizontal, 20)
-//            }
-//            Spacer()
-//            Button(model.isEditing ? "Done" : "Edit") {
-//                model.editButtonPressed()
-//            }
-//            .padding(.horizontal, 20)
-//        }
-//    }
-//
-//    var body: some View {
-//        VStack {
-//            editAndCancelButtons
-//            // this syntax would be great:
-//            // model.isEditing ? editingView : navigatingView
-//            if model.isEditing {
-//                editingView
-//            }
-//            else {
-//                navigatingView
-//            }
-//        }
-//    }
-//}
+@MainActor
+class ModelDrivenView<ModelType: ViewModel> {
+    @ObservedObject var model: ModelType
+    
+    init(model: ModelType) {
+        self.model = model
+    }
+    
+    @ViewBuilder var editAndCancelButtons: some View {
+        HStack {
+            if model.isEditing {
+                Button("Cancel") {
+                    self.model.cancelButtonPressed()
+                }
+                .tint(.red)
+                .padding(.horizontal, 20)
+            }
+            Spacer()
+            Button(model.isEditing ? "Done" : "Edit") {
+                self.model.editButtonPressed()
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
+    @ViewBuilder var body: some View {
+        VStack {
+            editAndCancelButtons
+            // this syntax would be great:
+            // model.isEditing ? editingView : navigatingView
+            if model.isEditing {
+                editingView()
+            }
+            else {
+                navigatingView()
+            }
+        }
+    }
+    
+    @ViewBuilder func editingView() -> some View {
+        Text("Editing")
+    }
+    
+    @ViewBuilder func navigatingView() -> some View {
+        Text("Navigating")
+    }
+}
 
 @MainActor
 protocol DatabasesSaver: AnyObject {
@@ -84,7 +95,6 @@ protocol DatabasesSaver: AnyObject {
 final class EditDatabasesModel: ViewModel, DatabaseSaver {
     weak var parentModel: (any DatabasesSaver)?
     @Published var draftDatabases: IdentifiedArrayOf<Database>
-    @Published var isEditing: Bool
     
     var databases: IdentifiedArrayOf<Database> {
         parentModel?.databases ?? []
@@ -93,10 +103,10 @@ final class EditDatabasesModel: ViewModel, DatabaseSaver {
     init(parentModel: DatabasesSaver? = nil, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.draftDatabases = parentModel?.databases ?? []
-        self.isEditing = isEditing
+        super.init(isEditing: isEditing)
     }
         
-    func editButtonPressed() {
+    override func editButtonPressed() {
         if isEditing {
             parentModel?.updateDatabases(databases: draftDatabases)
         }
@@ -111,7 +121,7 @@ final class EditDatabasesModel: ViewModel, DatabaseSaver {
         parentModel?.updateDatabases(databases: draftDatabases)
     }
     
-    func cancelButtonPressed() {
+    override func cancelButtonPressed() {
         isEditing = false
     }
     
@@ -124,58 +134,29 @@ final class EditDatabasesModel: ViewModel, DatabaseSaver {
     }
 }
 
-struct EditDatabases: View {
-    @ObservedObject var model: EditDatabasesModel
-    
-    var body: some View {
-        VStack {
-            editAndCancelButtons
-            if model.isEditing {
-                editingView
-            }
-            else {
-                navigatingView
-            }
-            Spacer()
-        }
-    }
-    
-    var editAndCancelButtons: some View {
-        HStack {
-            if model.isEditing {
-                Button("Cancel") {
-                    model.cancelButtonPressed()
-                }
-                .tint(.red)
-                .padding(.horizontal, 20)
-            }
-            Spacer()
-            Button(model.isEditing ? "Done" : "Edit") {
-                model.editButtonPressed()
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-    
-    var editingView: some View {
+@MainActor
+// Fatal error: views must be value types (either a struct or an enum); EditDatabases is a class.
+// structs can't inherit from anything but a protocol, so ModelDrivenView must be a protocol
+final class EditDatabases: ModelDrivenView<EditDatabasesModel>, View {
+    func editingView() -> some View {
         Form {
             Section("Databases") {
-                ForEach($model.draftDatabases) { $table in
-                    TextField("Database Name", text: $table.name)
+                ForEach($model.draftDatabases) { $database in
+                    TextField("Database Name", text: $database.name)
                 }
                 .onDelete(perform: removeDatabases)
                 Button("Add Database") {
-                    model.addDatabase()
+                    self.model.addDatabase()
                 }
             }
         }
     }
     
-    var navigatingView: some View {
+    func navigatingView() -> some View {
         List {
             Section("Databases") {
                 ForEach(model.databases) { database in
-                    NavigationLink(value: NavigationPathCase.database(EditDatabaseModel(parentModel: model, database: database))) {
+                    NavigationLink(value: NavigationPathCase.database(EditDatabaseModel(parentModel: self.model, database: database))) {
                         Text(database.name)
                     }
                 }

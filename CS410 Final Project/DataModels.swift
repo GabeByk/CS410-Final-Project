@@ -33,13 +33,20 @@ extension Database {
 
 extension Database: Equatable, Hashable {
     nonisolated static func == (lhs: Database, rhs: Database) -> Bool {
-        return lhs.name == rhs.name && lhs.entities == rhs.entities
+//        return lhs.name == rhs.name && lhs.entities == rhs.entities
+        return lhs.id == rhs.id
     }
 }
 
 struct Entity: Identifiable, Equatable, Hashable {
     // while the primary key should identify it, we want our own in case the user wants to change the primary key later
     let id: Tagged<Self, UUID>
+    
+    enum PrimaryKey: Equatable, Hashable {
+        case id(Entity.ID)
+        case property(Property)
+        case properties([Property])
+    }
     
     var name: String
     
@@ -56,22 +63,28 @@ struct Entity: Identifiable, Equatable, Hashable {
         }
     }
     
-    // set of properties that are unique per entity; each id in the set should be a property in the entity's properties
     // could probably be a computed property but it's theta(n) for n properties, so it's a function
-    func primaryKey() -> [Property] {
+    ///
+    /// Determines which PrimaryKey case is appropriate for this entity, and returns it.
+    /// - Returns: PrimaryKey.id(self.id) if no properties are primary, PrimaryKey.property with the member of self.properties marked primary if only one is found,
+    /// or PrimaryKey.properties with all properties marked primary if more than one is found.
+    func primaryKey() -> PrimaryKey {
         var key: [Property] = []
         for property in properties {
             if property.isPrimary {
                 key.append(property)
             }
         }
-        return key
+        if key.count == 0 {
+            return .id(id)
+        }
+        else if key.count == 1 {
+            return .property(key[0])
+        }
+        else {
+            return .properties(key)
+        }
     }
-    
-    func hasValidPrimaryKey() -> Bool {
-        return primaryKey().count > 0
-    }
-
 }
 
 extension Entity {
@@ -82,6 +95,7 @@ extension Entity {
 
 struct Property: Identifiable, Equatable, Hashable {
     let id: Tagged<Self, UUID>
+    /// whether this property is part of the primary key for its entity. a property should be marked as primary if the value of all primary properties for an entity are enough to uniquely determine which instance has those properties.
     var isPrimary: Bool
     var name: String
     var value: Value?
@@ -103,7 +117,7 @@ struct Property: Identifiable, Equatable, Hashable {
         case string(String)
         case bool(Bool)
         case double(Double)
-        case entity(Entity)
+        case entity(Entity.ID)
     }
 }
 

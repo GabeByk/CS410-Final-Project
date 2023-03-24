@@ -20,16 +20,15 @@ final class EditDatabaseModel: ViewModel {
     var parentModel: DatabaseSaver?
     @Published var database: Database
     @Published var draftDatabase: Database
-    @Published var isEditing: Bool
         
     init(parentModel: DatabaseSaver? = nil, database: Database, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.database = database
         self.draftDatabase = database
-        self.isEditing = isEditing
+        super.init(isEditing: isEditing)
     }
     
-    func editButtonPressed() {
+    override func editButtonPressed() {
         if isEditing {
             database = draftDatabase
             parentModel?.updateDatabase(database: draftDatabase)
@@ -40,7 +39,7 @@ final class EditDatabaseModel: ViewModel {
         isEditing.toggle()
     }
     
-    func cancelButtonPressed() {
+    override func cancelButtonPressed() {
         isEditing = false
     }
     

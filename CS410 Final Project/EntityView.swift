@@ -18,16 +18,15 @@ final class EditEntityModel: ViewModel {
     var parentModel: EntitySaver?
     @Published var entity: Entity
     @Published var draftEntity: Entity
-    @Published var isEditing: Bool
     
     init(parentModel: EntitySaver? = nil, entity: Entity, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.entity = entity
         self.draftEntity = entity
-        self.isEditing = isEditing
+        super.init(isEditing: isEditing)
     }
     
-    func editButtonPressed() {
+    override func editButtonPressed() {
         if isEditing {
             entity = draftEntity
             parentModel?.updateEntity(entity: draftEntity)
@@ -38,7 +37,7 @@ final class EditEntityModel: ViewModel {
         isEditing.toggle()
     }
     
-    func cancelButtonPressed() {
+    override func cancelButtonPressed() {
         isEditing = false
     }
     
