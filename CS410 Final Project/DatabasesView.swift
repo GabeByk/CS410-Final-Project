@@ -91,8 +91,14 @@ protocol DatabasesSaver: AnyObject {
     var databases: IdentifiedArrayOf<Database> { get }
 }
 
+extension AppModel: DatabasesSaver {
+    func updateDatabases(databases: IdentifiedArrayOf<Database>) {
+        self.databases = databases
+    }
+}
+
 @MainActor
-final class EditDatabasesModel: ViewModel, DatabaseSaver {
+final class EditDatabasesModel: ViewModel {
     weak var parentModel: (any DatabasesSaver)?
     @Published var draftDatabases: IdentifiedArrayOf<Database>
     
@@ -114,11 +120,6 @@ final class EditDatabasesModel: ViewModel, DatabaseSaver {
             draftDatabases = databases
         }
         isEditing.toggle()
-    }
-    
-    func updateDatabase(database: Database) {
-        self.draftDatabases[id: database.id] = database
-        parentModel?.updateDatabases(databases: draftDatabases)
     }
     
     override func cancelButtonPressed() {

@@ -9,7 +9,11 @@ import Foundation
 import IdentifiedCollections
 import Tagged
 
-struct Database: Identifiable {
+protocol Object {
+    static var empty: Self { get }
+}
+
+struct Database: Identifiable, Object {
     let id: Tagged<Self, UUID>
     var name: String
     var entities: IdentifiedArrayOf<Entity> = []
@@ -38,7 +42,7 @@ extension Database: Equatable, Hashable {
     }
 }
 
-struct Entity: Identifiable, Equatable, Hashable {
+struct Entity: Identifiable, Equatable, Hashable, Object {
     // while the primary key should identify it, we want our own in case the user wants to change the primary key later
     let id: Tagged<Self, UUID>
     
@@ -93,14 +97,14 @@ extension Entity {
     }
 }
 
-struct Property: Identifiable, Equatable, Hashable {
+struct Property: Identifiable, Equatable, Hashable, Object {
     let id: Tagged<Self, UUID>
     /// whether this property is part of the primary key for its entity. a property should be marked as primary if the value of all primary properties for an entity are enough to uniquely determine which instance has those properties.
     var isPrimary: Bool
     var name: String
-    var value: Value?
+    var value: Value
     
-    init(name: String, value: Value? = nil, isPrimary: Bool = false, id: Tagged<Self, UUID>? = nil) {
+    init(name: String, value: Value, isPrimary: Bool = false, id: Tagged<Self, UUID>? = nil) {
         self.name = name
         self.value = value
         self.isPrimary = isPrimary
@@ -113,16 +117,47 @@ struct Property: Identifiable, Equatable, Hashable {
     }
     
     enum Value: Equatable, Hashable {
-        case int(Int)
-        case string(String)
-        case bool(Bool)
-        case double(Double)
-        case entity(Entity.ID)
+        case int(Int?)
+        case string(String?)
+        case bool(Bool?)
+        case double(Double?)
+        case entity(Entity.ID?)
+        
+        var int: String {
+            "Integer"
+        }
+        var string: String {
+            "Text"
+        }
+        var bool: String {
+            "True or False"
+        }
+        var double: String {
+            "Decimal"
+        }
+        var entity: String {
+            "Entity"
+        }
     }
 }
 
 extension Property {
+    var valueType: String {
+        switch value {
+        case .int(_):
+            return value.int
+        case .string(_):
+            return value.string
+        case .bool(_):
+            return value.bool
+        case .double(_):
+            return value.double
+        case .entity(_):
+            return value.entity
+        }
+    }
+    
     static var empty: Property {
-        return Property(name: "")
+        return Property(name: "", value: .string(nil))
     }
 }

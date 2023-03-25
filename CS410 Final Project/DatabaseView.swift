@@ -13,10 +13,17 @@ protocol DatabaseSaver: AnyObject {
     func updateDatabase(database: Database)
 }
 
+extension EditDatabasesModel: DatabaseSaver {
+    func updateDatabase(database: Database) {
+        self.draftDatabases[id: database.id] = database
+        parentModel?.updateDatabases(databases: draftDatabases)
+    }
+}
+
 @MainActor
 final class EditDatabaseModel: ViewModel {
     // when parentModel isn't weak, the one passed in seems to be lost?
-    #warning("parentModel isn't weak")
+    #warning("EditDatabaseModel parentModel isn't weak")
     var parentModel: DatabaseSaver?
     @Published var database: Database
     @Published var draftDatabase: Database
@@ -49,13 +56,6 @@ final class EditDatabaseModel: ViewModel {
     
     func removeEntities(at offsets: IndexSet) {
         draftDatabase.entities.remove(atOffsets: offsets)
-    }
-}
-
-extension EditDatabaseModel: EntitySaver {
-    func updateEntity(entity: Entity) {
-        self.database.entities[id: entity.id] = entity
-        parentModel?.updateDatabase(database: database)
     }
 }
 

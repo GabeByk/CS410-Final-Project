@@ -20,8 +20,8 @@ struct ContentView: View {
                         EditDatabase(model: model)
                     case let .entity(model):
                         EditEntity(model: model)
-                    case let .property(property):
-                        Text(property.name)
+                    case let .property(model):
+                        EditProperty(model: model)
                     }
                 }
         }

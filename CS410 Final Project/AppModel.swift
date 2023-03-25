@@ -11,20 +11,16 @@ import IdentifiedCollections
 enum NavigationPathCase: Equatable, Hashable {
     case database(EditDatabaseModel)
     case entity(EditEntityModel)
-    case property(Property)
+    case property(EditPropertyModel)
 }
 
 @MainActor
-class AppModel: ObservableObject, DatabasesSaver {
+class AppModel: ObservableObject {
     @Published var databases: IdentifiedArrayOf<Database>
     @Published var navigationPath: [NavigationPathCase]
     
     init(databases: IdentifiedArrayOf<Database> = [], navigationPath: [NavigationPathCase] = []) {
         self.databases = databases
         self.navigationPath = navigationPath
-    }
-    
-    func updateDatabases(databases: IdentifiedArrayOf<Database>) {
-        self.databases = databases
     }
 }

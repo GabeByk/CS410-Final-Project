@@ -6,15 +6,33 @@
 //
 
 import SwiftUI
+import IdentifiedCollections
 
 @MainActor
 protocol EntitySaver: AnyObject {
     func updateEntity(entity: Entity)
+    func entityFor(id: Entity.ID) -> Entity?
+    var entities: IdentifiedArrayOf<Entity> { get }
+}
+
+extension EditDatabaseModel: EntitySaver {
+    func updateEntity(entity: Entity) {
+        self.database.entities[id: entity.id] = entity
+        parentModel?.updateDatabase(database: database)
+    }
+    
+    func entityFor(id: Entity.ID) -> Entity? {
+        return database.entities[id: id]
+    }
+    
+    var entities: IdentifiedArrayOf<Entity> {
+        database.entities
+    }
 }
 
 @MainActor
 final class EditEntityModel: ViewModel {
-    #warning("parentModel isn't weak")
+    #warning("EditEntityModel parentModel isn't weak")
     var parentModel: EntitySaver?
     @Published var entity: Entity
     @Published var draftEntity: Entity
@@ -27,6 +45,7 @@ final class EditEntityModel: ViewModel {
     }
     
     override func editButtonPressed() {
+        // TODO: warning "Publishing changes from within view updates is not allowed, this will cause undefined behavior." when changing the entity's name
         if isEditing {
             entity = draftEntity
             parentModel?.updateEntity(entity: draftEntity)
@@ -103,11 +122,13 @@ struct EditEntity: View {
             }
             Section("Properties") {
                 ForEach(model.entity.properties) { property in
-                    HStack {
-                        Text(property.name)
-                        Spacer()
-                        primaryKeyImage(isPrimary: property.isPrimary)
-                            .foregroundColor(.red)
+                    NavigationLink(value: NavigationPathCase.property(EditPropertyModel(parentModel: model, property: property, isEditing: false))) {
+                        HStack {
+                            Text(property.name)
+                            Spacer()
+                            primaryKeyImage(isPrimary: property.isPrimary)
+                                .foregroundColor(.red)
+                        }
                     }
                 }
                 if model.entity.properties.count == 0 {
