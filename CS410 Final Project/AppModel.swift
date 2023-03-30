@@ -24,3 +24,23 @@ class AppModel: ObservableObject {
         self.navigationPath = navigationPath
     }
 }
+
+extension AppModel {
+    static var mockDatabase: AppModel {
+        let db: Database = .mockDatabase
+        let app = AppModel(databases: [db])
+        app.navigationPath = [.database(EditDatabaseModel(parentModel: EditDatabasesModel(parentModel: app), database: db))]
+        return app
+    }
+    
+    static var mockEntity: AppModel {
+        let app: AppModel = .mockDatabase
+        switch app.navigationPath[0] {
+        case let .database(model):
+            app.navigationPath.append(.entity(EditEntityModel(parentModel: model, entity: model.entities[0])))
+        default:
+            break
+        }
+        return app
+    }
+}

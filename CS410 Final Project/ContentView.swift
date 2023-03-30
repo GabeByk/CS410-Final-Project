@@ -15,16 +15,20 @@ struct ContentView: View {
         NavigationStack(path: $app.navigationPath) {
             EditDatabases(model: EditDatabasesModel(parentModel: app))
                 .navigationDestination(for: NavigationPathCase.self) { navigationItem in
-                    switch navigationItem {
-                    case let .database(model):
-                        EditDatabase(model: model)
-                    case let .entity(model):
-                        EditEntity(model: model)
-                    case let .property(model):
-                        EditProperty(model: model)
-                    }
+                    navigateTo(item: navigationItem)
                 }
         }
+    }
+}
+
+func navigateTo(item: NavigationPathCase) -> some View {
+    switch item {
+    case let .database(model):
+        return AnyView(EditDatabase(model: model))
+    case let .entity(model):
+        return AnyView(EditEntity(model: model))
+    case let .property(model):
+        return AnyView(EditProperty(model: model))
     }
 }
 

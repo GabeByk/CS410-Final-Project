@@ -39,6 +39,9 @@ final class EditDatabaseModel: ViewModel {
         if isEditing {
             database = draftDatabase
             parentModel?.updateDatabase(database: draftDatabase)
+            if parentModel == nil {
+                print("No parentModel to save changes")
+            }
         }
         else {
             draftDatabase = database
@@ -77,7 +80,15 @@ struct EditDatabase: View {
             }
             Section("Entity") {
                 ForEach($model.draftDatabase.entities) { $entity in
-                    TextField("Entity Name", text: $entity.name)
+                    HStack {
+                        TextField("Entity Name", text: $entity.name)
+                        Spacer()
+                        Button {
+                            entity.shouldShow.toggle()
+                        } label: {
+                            EntityType.shouldShowImage(shouldShow: entity.shouldShow)
+                        }
+                    }
                 }
                 .onDelete(perform: removeEntities)
                 Button("Add Entity") {
@@ -96,10 +107,14 @@ struct EditDatabase: View {
             Section("Database") {
                 Text(model.database.name)
             }
+            // TODO: weird jump when navigating from database screen to entity screen; gets reset after going out to the Databases screen and back
+            // happens in the previews, but not the real app
             Section("Entities") {
                 ForEach(model.database.entities) { entity in
-                    NavigationLink(value: NavigationPathCase.entity(EditEntityModel(parentModel: model, entity: entity))) {
-                        Text(entity.name)
+                    if entity.shouldShow {
+                        NavigationLink(value: NavigationPathCase.entity(EditEntityModel(parentModel: model, entity: entity))) {
+                            Text(entity.name)
+                        }
                     }
                 }
                 if model.database.entities.count == 0 {
@@ -111,7 +126,16 @@ struct EditDatabase: View {
 }
 
 struct DatabaseView_Previews: PreviewProvider {
+    
+    struct Preview: View {
+        @StateObject var app: AppModel = .mockDatabase
+        
+        var body: some View {
+            ContentView(app: app)
+        }
+    }
+    
     static var previews: some View {
-        EditDatabase(model: EditDatabaseModel(database: .empty))
+        Preview()
     }
 }

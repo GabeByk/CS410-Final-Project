@@ -8,23 +8,23 @@
 import SwiftUI
 import IdentifiedCollections
 
-protocol PropertySaver: AnyObject {
-    func updateProperty(_ property: Property)
-    func entityFor(id: Entity.ID) -> Entity?
-    var entities: IdentifiedArrayOf<Entity> { get }
+protocol PropertyTypeSaver: AnyObject {
+    func updateProperty(_ property: PropertyType)
+    func entityFor(id: EntityType.ID) -> EntityType?
+    var entities: IdentifiedArrayOf<EntityType> { get }
 }
 
-extension EditEntityModel: PropertySaver {
-    func updateProperty(_ property: Property) {
+extension EditPropertiesModel: PropertyTypeSaver {
+    func updateProperty(_ property: PropertyType) {
         entity.properties[id: property.id] = property
         parentModel?.updateEntity(entity: entity)
     }
     
-    func entityFor(id: Entity.ID) -> Entity? {
+    func entityFor(id: EntityType.ID) -> EntityType? {
         return parentModel?.entityFor(id: id)
     }
     
-    var entities: IdentifiedArrayOf<Entity> {
+    var entities: IdentifiedArrayOf<EntityType> {
         return parentModel?.entities ?? []
     }
 }
@@ -33,27 +33,27 @@ extension EditEntityModel: PropertySaver {
 final class EditPropertyModel: ViewModel {
     #warning("EditPropertyModel parentModel isn't weak")
     
-    var parentModel: PropertySaver?
-    @Published var property: Property
-    @Published var draftProperty: Property
+    var parentModel: PropertyTypeSaver?
+    @Published var property: PropertyType
+    @Published var draftProperty: PropertyType
     @Published var selectedType: String {
         didSet {
             let selected = selectedType
             switch selected {
-            case property.value.string:
-                draftProperty.value = .string(nil)
-            case property.value.int:
-                draftProperty.value = .int(nil)
-            case property.value.double:
-                draftProperty.value = .double(nil)
-            case property.value.bool:
-                draftProperty.value = .bool(nil)
-            case property.value.entity:
-                if let id = Entity.ID(uuidString: selectedEntity) {
-                    draftProperty.value = .entity(id)
+            case Value.stringForString:
+                draftProperty.type = .string(nil)
+            case Value.stringForInt:
+                draftProperty.type = .int(nil)
+            case Value.stringForDouble:
+                draftProperty.type = .double(nil)
+            case Value.stringForBool:
+                draftProperty.type = .bool(nil)
+            case Value.stringForEntity:
+                if let id = EntityType.ID(uuidString: selectedEntity) {
+                    draftProperty.type = .entity(id)
                 }
                 else {
-                    draftProperty.value = .entity(nil)
+                    draftProperty.type = .entity(nil)
                 }
             default:
                 break
@@ -62,21 +62,21 @@ final class EditPropertyModel: ViewModel {
     }
     @Published var selectedEntity: String = "None" {
         didSet {
-            if let id = Entity.ID(uuidString: selectedEntity) {
-                draftProperty.value = .entity(id)
+            if let id = EntityType.ID(uuidString: selectedEntity) {
+                draftProperty.type = .entity(id)
             }
             else {
-                draftProperty.value = .entity(nil)
+                draftProperty.type = .entity(nil)
             }
         }
     }
     
-    init(parentModel: PropertySaver? = nil, property: Property, isEditing: Bool = false) {
+    init(parentModel: PropertyTypeSaver? = nil, property: PropertyType, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.property = property
         self.draftProperty = property
         self.selectedType = property.valueType
-        self.types = [property.value.string, property.value.int, property.value.double, property.value.bool, property.value.entity]
+        self.types = [Value.stringForString, Value.stringForInt, Value.stringForDouble, Value.stringForBool, Value.stringForEntity]
         super.init(isEditing: isEditing)
         if let entity = associatedEntity {
             self.selectedEntity = String(describing: entity.id)
@@ -97,8 +97,8 @@ final class EditPropertyModel: ViewModel {
 
     let types: [String]
     
-    var associatedEntity: Entity? {
-        switch property.value {
+    var associatedEntity: EntityType? {
+        switch property.type {
         case .entity(let id):
             if let id {
                 return parentModel?.entityFor(id: id)
@@ -146,7 +146,7 @@ struct EditProperty: View {
                     Button() {
                         model.draftProperty.isPrimary.toggle()
                     } label: {
-                        primaryKeyImage(isPrimary: model.draftProperty.isPrimary)
+                        PropertyType.primaryKeyImage(isPrimary: model.draftProperty.isPrimary)
                     }
                     .tint(.red)
                 }
@@ -159,7 +159,7 @@ struct EditProperty: View {
                     }
                 }
             }
-            if model.selectedType == model.property.value.entity {
+            if model.selectedType == Value.stringForEntity {
                 Section("Entity") {
                     if model.entities == [] {
                         Text("No Entities")
@@ -167,8 +167,8 @@ struct EditProperty: View {
                     else {
                         Picker("Entity:", selection: $model.selectedEntity) {
                             ForEach(model.entities, id:\.self) { entityID in
-                                if let id = Entity.ID(uuidString: entityID) {
-                                    // TODO: does showing the entity's name here cause "Publishing changes from within view updates is not allowed, this will cause undefined behavior." warning?
+                                if let id = EntityType.ID(uuidString: entityID) {
+                                    // TODO: ?does showing the entity's name here cause "Publishing changes from within view updates is not allowed, this will cause undefined behavior." warning?
                                     Text(model.parentModel?.entityFor(id: id)?.name ?? "Entity not found")
                                 }
                                 else {
@@ -188,12 +188,12 @@ struct EditProperty: View {
                 HStack {
                     Text(model.property.name)
                     Spacer()
-                    primaryKeyImage(isPrimary: model.property.isPrimary)
+                    PropertyType.primaryKeyImage(isPrimary: model.property.isPrimary)
                         .foregroundColor(.red)
                 }
             }
             Section("Data Type") {
-                Text(model.property.valueType == model.property.value.entity ? model.associatedEntity?.name ?? "Entity not chosen" : model.property.valueType)
+                Text(model.property.valueType == Value.stringForEntity ? model.associatedEntity?.name ?? "Entity not chosen" : model.property.valueType)
             }
         }
     }

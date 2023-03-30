@@ -8,145 +8,81 @@
 import SwiftUI
 import IdentifiedCollections
 
-@MainActor
-protocol EntitySaver: AnyObject {
-    func updateEntity(entity: Entity)
-    func entityFor(id: Entity.ID) -> Entity?
-    var entities: IdentifiedArrayOf<Entity> { get }
+enum EntityViewState {
+    case table
+    case properties
 }
 
-extension EditDatabaseModel: EntitySaver {
-    func updateEntity(entity: Entity) {
+@MainActor
+protocol EntityTypeSaver: AnyObject {
+    func updateEntity(entity: EntityType)
+    func entityFor(id: EntityType.ID) -> EntityType?
+    var entities: IdentifiedArrayOf<EntityType> { get }
+}
+
+extension EditDatabaseModel: EntityTypeSaver {
+    func updateEntity(entity: EntityType) {
         self.database.entities[id: entity.id] = entity
         parentModel?.updateDatabase(database: database)
     }
     
-    func entityFor(id: Entity.ID) -> Entity? {
+    func entityFor(id: EntityType.ID) -> EntityType? {
         return database.entities[id: id]
     }
     
-    var entities: IdentifiedArrayOf<Entity> {
+    var entities: IdentifiedArrayOf<EntityType> {
         database.entities
     }
 }
 
 @MainActor
-final class EditEntityModel: ViewModel {
+final class EditEntityModel: ObservableObject {
     #warning("EditEntityModel parentModel isn't weak")
-    var parentModel: EntitySaver?
-    @Published var entity: Entity
-    @Published var draftEntity: Entity
+    var parentModel: EntityTypeSaver?
+    @Published var entity: EntityType
+    @Published var state: EntityViewState
     
-    init(parentModel: EntitySaver? = nil, entity: Entity, isEditing: Bool = false) {
+    // TODO: ?entity with no properties defaults to .properties, but entity with properties defaults to .table? maybe entity with instances defaults to .table, so you have to switch to the table view when you add your first instance?
+    init(parentModel: EntityTypeSaver? = nil, entity: EntityType, state: EntityViewState = .properties, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.entity = entity
-        self.draftEntity = entity
-        super.init(isEditing: isEditing)
+        self.state = state
     }
-    
-    override func editButtonPressed() {
-        // TODO: warning "Publishing changes from within view updates is not allowed, this will cause undefined behavior." when changing the entity's name
-        if isEditing {
-            entity = draftEntity
-            parentModel?.updateEntity(entity: draftEntity)
-        }
-        else {
-            draftEntity = entity
-        }
-        isEditing.toggle()
-    }
-    
-    override func cancelButtonPressed() {
-        isEditing = false
-    }
-    
-    func addProperty() {
-        draftEntity.properties.append(.empty)
-    }
-    
-    func removeProperties(at offsets: IndexSet) {
-        draftEntity.properties.remove(atOffsets: offsets)
-    }
-    
 }
 
-
+extension EditEntityModel: Equatable, Hashable {
+    nonisolated static func == (lhs: EditEntityModel, rhs: EditEntityModel) -> Bool {
+        return lhs === rhs
+    }
+    
+    nonisolated func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
+    }
+}
 
 struct EditEntity: View {
     @ObservedObject var model: EditEntityModel
 
     var body: some View {
-        ModelDrivenView(model: model) {
-            editingView
-        } nonEditingView: {
-            navigatingView
+        switch model.state {
+        case .properties:
+            EditPropertiesView(model: EditPropertiesModel(parentModel: model, entity: model.entity))
+        case .table:
+            EditTableView(model: EditTableModel(parentModel: model, entity: model.entity))
         }
     }
-    
-    var editingView: some View {
-        Form {
-            Section("Entity") {
-                TextField("Entity Name", text: $model.draftEntity.name)
-            }
-            Section("Properties") {
-                ForEach($model.draftEntity.properties) { $property in
-                    HStack {
-                        TextField("Property Name", text: $property.name)
-                        Spacer()
-                        Button {
-                            property.isPrimary.toggle()
-                        } label: {
-                            // TODO: have a pop-up tutorial type thing about what a primary key is, etc
-                            primaryKeyImage(isPrimary: property.isPrimary)
-                        }
-                        .buttonStyle(.borderless)
-                        .tint(.red)
-                    }
-                }
-                .onDelete(perform: removeProperties)
-                Button("Add Property") {
-                    model.addProperty()
-                }
-            }
-        }
-    }
-    
-    func removeProperties(at offsets: IndexSet) {
-        model.removeProperties(at: offsets)
-    }
-    
-    var navigatingView: some View {
-        List {
-            Section("Entity") {
-                Text(model.entity.name)
-            }
-            Section("Properties") {
-                ForEach(model.entity.properties) { property in
-                    NavigationLink(value: NavigationPathCase.property(EditPropertyModel(parentModel: model, property: property, isEditing: false))) {
-                        HStack {
-                            Text(property.name)
-                            Spacer()
-                            primaryKeyImage(isPrimary: property.isPrimary)
-                                .foregroundColor(.red)
-                        }
-                    }
-                }
-                if model.entity.properties.count == 0 {
-                    // TODO: don't show again?
-                    Text("Try adding some properties in the edit view!")
-                }
-            }
-        }
-    }
-}
-
-// this should maybe be a static member of the class
-func primaryKeyImage(isPrimary: Bool) -> Image {
-    Image(systemName: isPrimary ? "key.fill" : "key")
 }
 
 struct EditEntity_Previews: PreviewProvider {
+    struct Preview: View {
+        @StateObject var app: AppModel = .mockEntity
+        
+        var body: some View {
+            ContentView(app: app)
+        }
+    }
+    
     static var previews: some View {
-        EditEntity(model: EditEntityModel(entity: .empty))
+        Preview()
     }
 }
