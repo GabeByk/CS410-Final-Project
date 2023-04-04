@@ -168,7 +168,6 @@ struct EditProperty: View {
                         Picker("Entity:", selection: $model.selectedEntity) {
                             ForEach(model.entities, id:\.self) { entityID in
                                 if let id = EntityType.ID(uuidString: entityID) {
-                                    // TODO: ?does showing the entity's name here cause "Publishing changes from within view updates is not allowed, this will cause undefined behavior." warning?
                                     Text(model.parentModel?.entityFor(id: id)?.name ?? "Entity not found")
                                 }
                                 else {
