@@ -31,8 +31,8 @@ extension EditPropertiesModel: PropertyTypeSaver {
 
 @MainActor
 final class EditPropertyModel: ViewModel {
+
     #warning("EditPropertyModel parentModel isn't weak")
-    
     var parentModel: PropertyTypeSaver?
     @Published var property: PropertyType
     @Published var draftProperty: PropertyType
@@ -40,16 +40,16 @@ final class EditPropertyModel: ViewModel {
         didSet {
             let selected = selectedType
             switch selected {
-            case Value.stringForString:
-                draftProperty.type = .string(nil)
-            case Value.stringForInt:
-                draftProperty.type = .int(nil)
-            case Value.stringForDouble:
-                draftProperty.type = .double(nil)
-            case Value.stringForBool:
-                draftProperty.type = .bool(nil)
-            case Value.stringForEntity:
-                if let id = EntityType.ID(uuidString: selectedEntity) {
+            case ValueType.stringForString:
+                draftProperty.type = .string
+            case ValueType.stringForInt:
+                draftProperty.type = .int
+            case ValueType.stringForDouble:
+                draftProperty.type = .double
+            case ValueType.stringForBool:
+                draftProperty.type = .bool
+            case ValueType.stringForEntity:
+                if let id = Int64(selectedEntity) {
                     draftProperty.type = .entity(id)
                 }
                 else {
@@ -62,11 +62,8 @@ final class EditPropertyModel: ViewModel {
     }
     @Published var selectedEntity: String = "None" {
         didSet {
-            if let id = EntityType.ID(uuidString: selectedEntity) {
+            if let id = Int64(selectedEntity) {
                 draftProperty.type = .entity(id)
-            }
-            else {
-                draftProperty.type = .entity(nil)
             }
         }
     }
@@ -76,7 +73,7 @@ final class EditPropertyModel: ViewModel {
         self.property = property
         self.draftProperty = property
         self.selectedType = property.valueType
-        self.types = [Value.stringForString, Value.stringForInt, Value.stringForDouble, Value.stringForBool, Value.stringForEntity]
+        self.types = [ValueType.stringForString, ValueType.stringForInt, ValueType.stringForDouble, ValueType.stringForBool, ValueType.stringForEntity]
         super.init(isEditing: isEditing)
         if let entity = associatedEntity {
             self.selectedEntity = String(describing: entity.id)
@@ -159,15 +156,17 @@ struct EditProperty: View {
                     }
                 }
             }
-            if model.selectedType == Value.stringForEntity {
+            if model.selectedType == ValueType.stringForEntity {
                 Section("Entity") {
                     if model.entities == [] {
                         Text("No Entities")
                     }
                     else {
+                        // TODO: picker view that you can scroll through
+                        // TODO: seems to have been broken after changing IDs to be Int64s instead of Tagged<Self, UUID>s: there is one for each option, but it shows nil as the name
                         Picker("Entity:", selection: $model.selectedEntity) {
                             ForEach(model.entities, id:\.self) { entityID in
-                                if let id = EntityType.ID(uuidString: entityID) {
+                                if let id = Int64(entityID) {
                                     Text(model.parentModel?.entityFor(id: id)?.name ?? "Entity not found")
                                 }
                                 else {
@@ -192,7 +191,7 @@ struct EditProperty: View {
                 }
             }
             Section("Data Type") {
-                Text(model.property.valueType == Value.stringForEntity ? model.associatedEntity?.name ?? "Entity not chosen" : model.property.valueType)
+                Text(model.property.valueType == ValueType.stringForEntity ? model.associatedEntity?.name ?? "Entity not chosen" : model.property.valueType)
             }
         }
     }
@@ -208,6 +207,6 @@ struct EditProperty: View {
 
 struct EditProperty_Previews: PreviewProvider {
     static var previews: some View {
-        EditProperty(model: EditPropertyModel(property: .empty, isEditing: true))
+        EditProperty(model: EditPropertyModel(property: .empty(entityTypeID: -1), isEditing: true))
     }
 }

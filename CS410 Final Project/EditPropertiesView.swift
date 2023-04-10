@@ -40,7 +40,7 @@ final class EditPropertiesModel: ViewModel {
     @Published var entity: EntityType
     @Published var draftEntity: EntityType
     
-    // TODO: ?entity with no properties defaults to .properties, but entity with properties defaults to .table? maybe entity with instances defaults to .table, so you have to switch to the table view when you add your first instance?
+    // TODO?: entity with no properties defaults to .properties, but entity with properties defaults to .table? maybe entity with instances defaults to .table, so you have to switch to the table view when you add your first instance?
     init(parentModel: PropertiesSaver? = nil, entity: EntityType, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.entity = entity
@@ -53,8 +53,8 @@ final class EditPropertiesModel: ViewModel {
     }
     
     override func editButtonPressed() {
-        // TODO: ?what causes runtime warning "Publishing changes from within view updates is not allowed, this will cause undefined behavior."?
-        // something i changed seems to have fixed it?
+        // TODO?: what causes runtime warning "Publishing changes from within view updates is not allowed, this will cause undefined behavior."?
+        // something I changed seems to have fixed it?
         if isEditing {
             entity = draftEntity
             parentModel?.updateEntity(entity: draftEntity)
@@ -70,7 +70,8 @@ final class EditPropertiesModel: ViewModel {
     }
     
     func addProperty() {
-        draftEntity.addProperty(.empty)
+        #warning("defaulting entityTypeID to -2 in EditPropertiesModel.addProperty")
+        draftEntity.addProperty(.empty(entityTypeID: draftEntity.id ?? -2))
     }
     
     func removeProperties(at offsets: IndexSet) {
@@ -152,7 +153,7 @@ struct EditPropertiesView: View {
                         }
                     }
                     if model.entity.properties.count == 0 {
-                        // TODO: ?don't show again?
+                        // TODO?: don't show again?
                         Text("Try adding some properties in the edit view!")
                     }
                 }

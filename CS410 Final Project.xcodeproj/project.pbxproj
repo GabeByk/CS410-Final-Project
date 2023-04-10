@@ -21,6 +21,7 @@
 		00348C2329CA0A4600B3E4B2 /* DatabasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */; };
 		00348C2529CA16A300B3E4B2 /* DatabaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00348C2429CA16A300B3E4B2 /* DatabaseView.swift */; };
 		0047A68229CE63E9005E76EE /* PropertyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0047A68129CE63E9005E76EE /* PropertyView.swift */; };
+		004B127429E44C4900AEBCE2 /* GRDBDatabases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */; };
 		0080483229CA5A5F0074EAA0 /* EntityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0080483129CA5A5F0074EAA0 /* EntityView.swift */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +38,7 @@
 		00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabasesView.swift; sourceTree = "<group>"; };
 		00348C2429CA16A300B3E4B2 /* DatabaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseView.swift; sourceTree = "<group>"; };
 		0047A68129CE63E9005E76EE /* PropertyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PropertyView.swift; sourceTree = "<group>"; };
+		004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GRDBDatabases.swift; sourceTree = "<group>"; };
 		0080483129CA5A5F0074EAA0 /* EntityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -85,6 +87,7 @@
 				0047A68129CE63E9005E76EE /* PropertyView.swift */,
 				000104C729D6528600316B3A /* EditPropertiesView.swift */,
 				000104C529D6520800316B3A /* EntityTableView.swift */,
+				004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */,
 			);
 			path = "CS410 Final Project";
 			sourceTree = "<group>";
@@ -183,6 +186,7 @@
 				00348C1929CA00EB00B3E4B2 /* AppModel.swift in Sources */,
 				00348C1B29CA01A400B3E4B2 /* DataModels.swift in Sources */,
 				0080483229CA5A5F0074EAA0 /* EntityView.swift in Sources */,
+				004B127429E44C4900AEBCE2 /* GRDBDatabases.swift in Sources */,
 				0047A68229CE63E9005E76EE /* PropertyView.swift in Sources */,
 				000104C629D6520800316B3A /* EntityTableView.swift in Sources */,
 				00203CE429C8F68A00AC0240 /* CS410_Final_ProjectApp.swift in Sources */,

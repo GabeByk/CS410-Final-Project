@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct CS410_Final_ProjectApp: App {
     @StateObject private var app: AppModel = AppModel()
+//    @StateObject private var app: AppModel = .mockDatabases
     @Environment(\.scenePhase) var scenePhase
 
     var body: some Scene {

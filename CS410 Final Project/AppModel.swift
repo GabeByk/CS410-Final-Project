@@ -63,6 +63,13 @@ func loadDatabases() -> IdentifiedArrayOf<Database> {
 }
 
 extension AppModel {
+    static var mockDatabases: AppModel {
+        let dbs: IdentifiedArrayOf<Database> = [.mockDatabase]
+        let app = AppModel(databases: dbs)
+        return app
+    }
+    
+    // TODO: there is some empty space at the top when using this
     static var mockDatabase: AppModel {
         let db: Database = .mockDatabase
         let app = AppModel(databases: [db])

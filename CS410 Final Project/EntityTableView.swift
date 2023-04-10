@@ -50,7 +50,7 @@ final class EditTableModel: ViewModel {
 struct TableView: View {
     let entity: EntityType
     
-    // TODO: ?does GRDB have an easy way to show a table?
+    // TODO?: does GRDB have an easy way to show a table?
     var body: some View {
         // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-multi-column-lists-using-table
         // https://developer.apple.com/documentation/swiftui/table
@@ -65,7 +65,7 @@ struct TableView: View {
             }
         } rows: {
             // TODO: each row navigates to an Entity's own view that allows you to edit its fields. Looks like the EntityType's view, but allows you to enter information for each property rather than allowing you to edit the properties
-            ForEach(entity.instances, content: TableRow.init)
+            ForEach(entity.entities, content: TableRow.init)
         }
     }
 }

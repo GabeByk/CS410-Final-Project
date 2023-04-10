@@ -54,7 +54,8 @@ final class EditDatabaseModel: ViewModel {
     }
     
     func addEntity() {
-        draftDatabase.entities.append(.empty)
+        #warning("defaulting draftDatabaseID to -2 in EditDatabaseModel.addEntity")
+        draftDatabase.entities.append(.empty(databaseID: draftDatabase.id ?? -2))
     }
     
     func removeEntities(at offsets: IndexSet) {
@@ -107,8 +108,6 @@ struct EditDatabase: View {
             Section("Database") {
                 Text(model.database.name)
             }
-            // TODO: weird jump when navigating from database screen to entity screen; gets reset after going out to the Databases screen and back
-            // happens in the previews, but not the real app
             Section("Entities") {
                 ForEach(model.database.entities) { entity in
                     if entity.shouldShow {

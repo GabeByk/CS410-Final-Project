@@ -42,7 +42,7 @@ final class EditEntityModel: ObservableObject {
     @Published var entity: EntityType
     @Published var state: EntityViewState
     
-    // TODO: ?entity with no properties defaults to .properties, but entity with properties defaults to .table? maybe entity with instances defaults to .table, so you have to switch to the table view when you add your first instance?
+    // TODO?: entity with no properties defaults to .properties, but entity with properties defaults to .table? maybe entity with instances defaults to .table, so you have to switch to the table view when you add your first instance?
     init(parentModel: EntityTypeSaver? = nil, entity: EntityType, state: EntityViewState = .properties, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.entity = entity

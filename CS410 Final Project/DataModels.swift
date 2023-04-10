@@ -7,22 +7,27 @@
 
 import Foundation
 import IdentifiedCollections
-import Tagged
+// used for the EntityType and PropertyType's static properties for their images
 import SwiftUI
+import GRDB
+
+// TODO: can GRDB deal with Tagged<Self, Int64> as ID's data type and/or is that a good idea?
 
 struct Database: Identifiable {
-    let id: Tagged<Self, UUID>
+    public private(set) var id: Int64?
     var name: String
+    // TODO: use GRDB to store and access entities
     var entities: IdentifiedArrayOf<EntityType>
     
-    init(name: String, id: Tagged<Self, UUID>? = nil, entities: IdentifiedArrayOf<EntityType> = []) {
+    init(name: String, id: Int64? = nil, entities: IdentifiedArrayOf<EntityType> = []) {
         self.name = name
         self.entities = entities
-        if let id {
+        self.id = id
+    }
+    
+    mutating func initializeID(to id: Int64) {
+        if self.id == nil {
             self.id = id
-        }
-        else {
-            self.id = Self.ID(UUID())
         }
     }
 }
@@ -33,21 +38,23 @@ extension Database {
     }
     
     static var mockDatabase: Database {
-        return Database(name: "Database A", entities: [.mockEntityType])
+        return Database(name: "Database A", id: -1, entities: [.mockEntityType])
     }
 }
 
-extension Database: Equatable, Hashable, Codable {
+extension Database: Equatable, Hashable {
     nonisolated static func == (lhs: Database, rhs: Database) -> Bool {
-//        return lhs.name == rhs.name && lhs.entities == rhs.entities
         return lhs.id == rhs.id
     }
 }
 
-// TODO: ?Should EntityType be a value type?
-struct EntityType: Identifiable, Equatable, Hashable, Codable {
-    // while the primary key should identify it, we want our own in case the user wants to change the primary key later
-    let id: Tagged<Self, UUID>
+// MARK: - EntityType
+
+struct EntityType: Identifiable, Equatable, Hashable{
+    // while the primary key should identify it, we want our own ID in case the user wants to change the primary key later
+    public private(set) var id: Int64?
+    // which database this belongs to
+    var databaseID: Int64
     
     enum PrimaryKey: Equatable, Hashable {
         case id(EntityType.ID)
@@ -56,51 +63,71 @@ struct EntityType: Identifiable, Equatable, Hashable, Codable {
     }
     
     var name: String
-    var instances: IdentifiedArrayOf<Entity>
+    // TODO: don't encode and decode instances in AppModel.schemaFilename, since that info will go in the database using GRDB.
+    // TODO: use GRDB to access entities
+    var entities: IdentifiedArrayOf<Entity>
+    // TODO?: is this functionality necessary? having to show helper tables to work on them and add data will be kind of annoying
     var shouldShow: Bool
     
-    // found sets from https://developer.apple.com/documentation/swift/set
+    // TODO: use GRDB to access properties
     var properties: IdentifiedArrayOf<PropertyType>
     
-    init(name: String, shouldShow: Bool = true, id: Tagged<Self, UUID>? = nil, properties: IdentifiedArrayOf<PropertyType> = [], instances: IdentifiedArrayOf<Entity> = []) {
+    init(name: String, shouldShow: Bool = true, id: Int64? = nil, properties: IdentifiedArrayOf<PropertyType> = [], entities: IdentifiedArrayOf<Entity> = [], databaseID: Int64) {
         self.name = name
         self.shouldShow = shouldShow
-        self.instances = instances
+        self.entities = entities
         self.properties = properties
-        if let id {
+        self.id = id
+        self.databaseID = databaseID
+    }
+    
+    mutating func initializeID(to id: Int64) {
+        if self.id == nil {
             self.id = id
-        }
-        else {
-            self.id = Self.ID(UUID())
         }
     }
     
     mutating func removeProperty(_ property: PropertyType) {
         properties.remove(property)
-        for var instance in instances {
-            instance.removeValueFor(property: property)
+        for var instance in entities {
+            #warning("force unwrapping a PropertyType's ID in EntityType.removeProperty")
+            instance.removeValueFor(propertyTypeID: property.id!)
         }
     }
     
     mutating func removeProperties(at offsets: IndexSet) {
         for index in offsets {
             let property = properties[index]
-            for var instance in instances {
-                instance.removeValueFor(property: property)
-            }
+            removeProperty(property)
         }
-        properties.remove(atOffsets: offsets)
     }
     
     mutating func addProperty(_ property: PropertyType) {
         properties[id: property.id] = property
-        for var instance in instances {
-            instance.updateValueFor(property: property, newValue: property.type)
+        let value: Value
+        switch property.type {
+        case .int:
+            value = .int(nil)
+        case .string:
+            value = .string(nil)
+        case .bool:
+            value = .bool(nil)
+        case .double:
+            value = .double(nil)
+        // TODO: does the Value enum need to have the EntityType for the GUI to be able to scroll through all entities of that type?
+        // it should know which property type it is, and the property type knows which entity type it has, so it shouldn't be necessary
+        case .entity(_):
+            value = .entity(nil)
+        }
+        for var instance in entities {
+            #warning("force unwrapping PropertyType.ID in EntityType.addProperty")
+            instance.updateValueFor(propertyTypeID: property.id!, newValue: value)
         }
     }
     
     mutating func addInstance() {
-        instances.append(Entity())
+        #warning("defaulting entityTypeID to -2 in EntityType.addInstance")
+        entities.append(.empty(entityTypeID: id ?? -2))
     }
     
     // could probably be a computed property but it's theta(n) for n properties, so it's a function
@@ -128,12 +155,12 @@ struct EntityType: Identifiable, Equatable, Hashable, Codable {
 }
 
 extension EntityType {
-    static var empty: EntityType {
-        return EntityType(name: "")
+    static func empty(databaseID: Int64) -> EntityType {
+        return EntityType(name: "", databaseID: databaseID)
     }
     
     static var mockEntityType: EntityType {
-        return EntityType(name: "Entity A", properties: [.mockPropertyType])
+        return EntityType(name: "Entity A", id: -1, properties: [.mockPropertyType], databaseID: Database.mockDatabase.id ?? 0)
     }
     
     static func shouldShowImage(shouldShow: Bool) -> Image {
@@ -141,23 +168,28 @@ extension EntityType {
     }
 }
 
-// TODO: ?now that Value is its own thing, should PropertyType be a value type?
-struct PropertyType: Identifiable, Equatable, Hashable, Codable {
-    let id: Tagged<Self, UUID>
+// MARK: - PropertyType
+
+struct PropertyType: Identifiable, Equatable, Hashable {
+    public private(set) var id: Int64?
     /// whether this property is part of the primary key for its entity. a property should be marked as primary if the value of all primary properties for an entity are enough to uniquely determine which instance has those properties.
     var isPrimary: Bool
     var name: String
-    var type: Value
+    var type: ValueType
+    // which EntityType this property is for
+    var entityTypeID: Int64
     
-    init(name: String, type: Value, isPrimary: Bool = false, id: Tagged<Self, UUID>? = nil) {
+    init(name: String, type: ValueType, isPrimary: Bool = false, id: Int64? = nil, entityTypeID: Int64) {
         self.name = name
         self.type = type
         self.isPrimary = isPrimary
-        if let id {
+        self.id = id
+        self.entityTypeID = entityTypeID
+    }
+    
+    mutating func initializeID(to id: Int64) {
+        if self.id == nil {
             self.id = id
-        }
-        else {
-            self.id = Self.ID(UUID())
         }
     }
 }
@@ -166,24 +198,24 @@ extension PropertyType {
     var valueType: String {
         switch type {
         case .int:
-            return Value.stringForInt
+            return ValueType.stringForInt
         case .string:
-            return Value.stringForString
+            return ValueType.stringForString
         case .bool:
-            return Value.stringForBool
+            return ValueType.stringForBool
         case .double:
-            return Value.stringForDouble
+            return ValueType.stringForDouble
         case .entity(_):
-            return Value.stringForEntity
+            return ValueType.stringForEntity
         }
     }
     
-    static var empty: PropertyType {
-        return PropertyType(name: "", type: .string(nil))
+    static func empty(entityTypeID: Int64) -> PropertyType {
+        return PropertyType(name: "", type: .string, entityTypeID: entityTypeID)
     }
     
     static var mockPropertyType: PropertyType {
-        return PropertyType(name: "Property A", type: .string(nil))
+        return PropertyType(name: "Property A", type: .string, id: -1, entityTypeID: EntityType.mockEntityType.id ?? 0)
     }
     
     static func primaryKeyImage(isPrimary: Bool) -> Image {
@@ -191,81 +223,196 @@ extension PropertyType {
     }
 }
 
+// MARK: - ValueType
+
+enum ValueType: Equatable, Hashable, Codable {
+    case int
+    case string
+    case bool
+    case double
+    case entity(EntityType.ID?)
+}
+
+extension ValueType {
+    static let stringForInt = "Integer"
+    static let stringForString = "Text"
+    static let stringForBool = "True or False"
+    static let stringForDouble = "Decimal"
+    static let stringForEntity = "Entity"
+}
+
+// MARK: - Value
+
 enum Value: Equatable, Hashable, Codable {
     case int(Int?)
     case string(String?)
     case bool(Bool?)
     case double(Double?)
-    case entity(EntityType.ID?)
+    case entity(Entity.ID?)
 }
 
-extension Value {
-    // might make sense for these to be immutable stored properties rather than compted properties
-    static var stringForInt: String {
-        "Integer"
-    }
-    static var stringForString: String {
-        "Text"
-    }
-    static var stringForBool: String {
-        "True or False"
-    }
-    static var stringForDouble: String {
-        "Decimal"
-    }
-    static var stringForEntity: String {
-        "Entity"
-    }
-}
+// MARK: - Entity
 
-struct Entity: Identifiable, Equatable, Hashable, Codable {
-    // TODO: ?should each entity have a weak link to its EntityType? or just its EntityType's ID?
-    // if weak link, then EntityType should for sure be a reference type
-    let id: Tagged<Self, UUID>
+struct Entity: Identifiable, Equatable, Hashable {
+    public private(set) var id: Int64?
+    // which EntityType this is an instance of
+    var entityTypeID: Int64
     // https://developer.apple.com/documentation/swift/dictionary
+    // TODO: use GRDB to access Properties by PropertyType ID (if possible?)
+    var properties: Dictionary<Int64, Property>
     
-    // TODO: ?different data structure so we guarantee we have a value if and only if our EntityType has a property for that value?
-    var values: Dictionary<PropertyType.ID, Value>
+    init(propertyTypes: IdentifiedArrayOf<PropertyType>? = nil, id: Int64? = nil, entityTypeID: Int64) {
+        self.id = id
+        self.properties = [:]
+        if let propertyTypes {
+            for propertyType in propertyTypes {
+                // figure out which kind of value we should have
+                let value: Value
+                switch propertyType.type {
+                case .int:
+                    value = .int(nil)
+                case .string:
+                    value = .string(nil)
+                case .bool:
+                    value = .bool(nil)
+                case .double:
+                    value = .double(nil)
+                case .entity(_):
+                    value = .entity(nil)
+                }
+                
+                #warning("defaulting entityID to -2 in Entity.init")
+                let property = Property(entityID: id ?? -2, value: value)
+                self.properties[propertyType.id ?? -2] = property
+            }
+        }
+        self.entityTypeID = entityTypeID
+    }
     
-    init(values: Dictionary<PropertyType.ID, Value> = [:], id: Tagged<Self, UUID>? = nil) {
-        if values.count != 0 {
-            self.values = values
+    func valueFor(propertyTypeID: Int64) -> Value? {
+        return properties[propertyTypeID]?.value
+    }
+    
+    ///
+    /// if the ID has not already been set, set it to the given ID.
+    mutating func initializeID(to id: Int64) {
+        if self.id == nil {
+            self.id = id
+        }
+    }
+    
+    ///
+    /// if the entity has this property, it will update its value. otherwise, it will add this property to its properties and give it the given value
+    mutating func updateValueFor(propertyTypeID: Int64, newValue: Value) {
+        if properties[propertyTypeID] != nil {
+            properties[propertyTypeID]!.value = newValue
         }
         else {
-            // TODO: initialize values to have nil for each PropertyType that the parent entity has. might require knowledge of EntityType
-            self.values = [:]
-        }
-        
-        if let id {
-            self.id = id
-        } else {
-            self.id = Self.ID(UUID())
+            properties[propertyTypeID] = Property(entityID: id ?? -2, value: newValue)
         }
     }
     
-    // TODO: ?should the API have you pass the property type or just its id?
-    func valueFor(property: PropertyType) -> Value? {
-        return values[property.id]
-    }
-    
-    mutating func updateValueFor(property: PropertyType, newValue: Value) {
-        values[property.id] = newValue
-    }
-    
-    mutating func removeValueFor(property: PropertyType) {
-        // the documentation says assigning a dictionary entry to nil removes it from the dictionary, which is handy
-        values[property.id] = nil
+    mutating func removeValueFor(propertyTypeID: Int64) {
+        // assigning a dictionary's value for a given type sets it to nil
+        properties[propertyTypeID] = nil
     }
 }
 
 extension Entity {
-    static var empty: Entity {
-        return Entity()
+    // TODO: empty as an instance method of the parent class instead? or even the addEntity makes its own instead of using this
+    static func empty(entityTypeID: Int64) -> Entity {
+        return Entity(entityTypeID: entityTypeID)
     }
 }
 
 extension Entity: CustomStringConvertible {
     var description: String {
         return String(describing: id)
+    }
+}
+
+// MARK: - Property
+struct Property: Identifiable, Equatable, Hashable {
+    public private(set) var id: Int64?
+    // which entity this property is for
+    var entityID: Int64
+    // TODO: we might need to have a propertyTypeID so GRDB can find us by PropertyTypeID
+    var value: Value
+
+    /// if the ID has not already been set, set it to the given ID.
+    mutating func initializeID(to id: Int64) {
+        if self.id == nil {
+            self.id = id
+        }
+    }
+}
+
+// MARK: - GRDB setup
+
+extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let entities = hasMany(EntityType.self, using: EntityType.databaseForeignKey)
+    enum Columns {
+        static let name = Column(CodingKeys.name)
+    }
+    
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}
+
+extension EntityType: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let databaseForeignKey = ForeignKey(["databaseID"])
+    static let database = belongsTo(Database.self, using: databaseForeignKey)
+    
+    static let properties = hasMany(PropertyType.self, using: PropertyType.entityTypeForeignKey)
+    static let entities = hasMany(Entity.self, using: Entity.entityTypeForeignKey)
+    
+    enum Columns {
+        static let name = Column(CodingKeys.name)
+        static let shouldShow = Column(CodingKeys.shouldShow)
+    }
+    
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}
+
+extension PropertyType: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let entityTypeForeignKey = ForeignKey(["entityTypeID"])
+    static let entityType = belongsTo(EntityType.self, using: entityTypeForeignKey)
+    
+    enum Columns {
+        static let name = Column(CodingKeys.name)
+        static let isPrimary = Column(CodingKeys.isPrimary)
+        static let type = Column(CodingKeys.type)
+    }
+    
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}
+
+extension Entity: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let entityTypeForeignKey = ForeignKey(["entityTypeID"])
+    static let entityType = belongsTo(EntityType.self, using: entityTypeForeignKey)
+    
+    // TODO: does this need to have a different using to look up by PropertyType ID?
+    static let properties = hasMany(Property.self, using: Property.entityForeignKey)
+    
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
+    }
+}
+
+extension Property: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let entityForeignKey = ForeignKey(["entityID"])
+    static let entity = belongsTo(Entity.self, using: entityForeignKey)
+    
+    enum Columns {
+        static let value = Column(CodingKeys.value)
+    }
+    
+    mutating func didInsert(_ inserted: InsertionSuccess) {
+        id = inserted.rowID
     }
 }
