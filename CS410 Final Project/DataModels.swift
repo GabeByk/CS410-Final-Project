@@ -11,12 +11,14 @@ import IdentifiedCollections
 import SwiftUI
 import GRDB
 
-// TODO: can GRDB deal with Tagged<Self, Int64> as ID's data type and/or is that a good idea?
+// TODO: pressing the add button on any menu no longer allows adding multiple (databases, entites and, properties); this is because it's not linked to the database and another is created with ID -2
+// TODO?: can the constructor automatically add the item to the database so the id is never nil and/or is that a good idea?
+// TODO?: can GRDB deal with Tagged<Self, Int64> as ID's data type and/or is that a good idea?
 
 struct Database: Identifiable {
     public private(set) var id: Int64?
     var name: String
-    // TODO: use GRDB to store and access entities
+    // TODO: use GRDB to store and access Database.entities; maybe this should be a computed property
     var entities: IdentifiedArrayOf<EntityType>
     
     init(name: String, id: Int64? = nil, entities: IdentifiedArrayOf<EntityType> = []) {
@@ -90,8 +92,9 @@ struct EntityType: Identifiable, Equatable, Hashable{
     mutating func removeProperty(_ property: PropertyType) {
         properties.remove(property)
         for var instance in entities {
-            #warning("force unwrapping a PropertyType's ID in EntityType.removeProperty")
-            instance.removeValueFor(propertyTypeID: property.id!)
+            if let id = property.id {
+                instance.removeValueFor(propertyTypeID: id)
+            }
         }
     }
     
@@ -104,24 +107,10 @@ struct EntityType: Identifiable, Equatable, Hashable{
     
     mutating func addProperty(_ property: PropertyType) {
         properties[id: property.id] = property
-        let value: Value
-        switch property.type {
-        case .int:
-            value = .int(nil)
-        case .string:
-            value = .string(nil)
-        case .bool:
-            value = .bool(nil)
-        case .double:
-            value = .double(nil)
-        // TODO: does the Value enum need to have the EntityType for the GUI to be able to scroll through all entities of that type?
-        // it should know which property type it is, and the property type knows which entity type it has, so it shouldn't be necessary
-        case .entity(_):
-            value = .entity(nil)
-        }
         for var instance in entities {
-            #warning("force unwrapping PropertyType.ID in EntityType.addProperty")
-            instance.updateValueFor(propertyTypeID: property.id!, newValue: value)
+            if let id = property.id {
+                instance.updateValueFor(propertyTypeID: id, newValue: nil)
+            }
         }
     }
     
@@ -160,12 +149,22 @@ extension EntityType {
     }
     
     static var mockEntityType: EntityType {
-        return EntityType(name: "Entity A", id: -1, properties: [.mockPropertyType], databaseID: Database.mockDatabase.id ?? 0)
+        return EntityType(name: "Entity A", id: -1, properties: [.mockPropertyType], databaseID: -1)
     }
     
     static func shouldShowImage(shouldShow: Bool) -> Image {
         Image(systemName: shouldShow ? "key.fill" : "key")
     }
+}
+
+// MARK: - ValueType
+
+enum ValueType: String, Equatable, Hashable, Codable, DatabaseValueConvertible {
+    case int = "Integer"
+    case string = "Text"
+    case bool = "True or False"
+    case double = "Decimal"
+    case entity = "Entity"
 }
 
 // MARK: - PropertyType
@@ -176,7 +175,9 @@ struct PropertyType: Identifiable, Equatable, Hashable {
     var isPrimary: Bool
     var name: String
     var type: ValueType
-    // which EntityType this property is for
+    // if type is .entity, which EntityType this PropertyType holds
+    var associatedEntityTypeID: Int64?
+    // which EntityType holds this property
     var entityTypeID: Int64
     
     init(name: String, type: ValueType, isPrimary: Bool = false, id: Int64? = nil, entityTypeID: Int64) {
@@ -196,18 +197,7 @@ struct PropertyType: Identifiable, Equatable, Hashable {
 
 extension PropertyType {
     var valueType: String {
-        switch type {
-        case .int:
-            return ValueType.stringForInt
-        case .string:
-            return ValueType.stringForString
-        case .bool:
-            return ValueType.stringForBool
-        case .double:
-            return ValueType.stringForDouble
-        case .entity(_):
-            return ValueType.stringForEntity
-        }
+        return type.rawValue
     }
     
     static func empty(entityTypeID: Int64) -> PropertyType {
@@ -215,7 +205,7 @@ extension PropertyType {
     }
     
     static var mockPropertyType: PropertyType {
-        return PropertyType(name: "Property A", type: .string, id: -1, entityTypeID: EntityType.mockEntityType.id ?? 0)
+        return PropertyType(name: "Property A", type: .string, id: -1, entityTypeID: -1)
     }
     
     static func primaryKeyImage(isPrimary: Bool) -> Image {
@@ -223,32 +213,57 @@ extension PropertyType {
     }
 }
 
-// MARK: - ValueType
-
-enum ValueType: Equatable, Hashable, Codable {
-    case int
-    case string
-    case bool
-    case double
-    case entity(EntityType.ID?)
-}
-
-extension ValueType {
-    static let stringForInt = "Integer"
-    static let stringForString = "Text"
-    static let stringForBool = "True or False"
-    static let stringForDouble = "Decimal"
-    static let stringForEntity = "Entity"
-}
-
 // MARK: - Value
 
-enum Value: Equatable, Hashable, Codable {
-    case int(Int?)
-    case string(String?)
-    case bool(Bool?)
-    case double(Double?)
-    case entity(Entity.ID?)
+protocol Value: Equatable, Hashable, Codable, CustomStringConvertible {
+    ///
+    /// - returns: nil if the value passed is nil, otherwise the result of running the constructor on the unwrapped value; implemented automatically using the required failable init
+    static func from(databaseValue: String?) -> Self?
+    init?(_ _: String)
+}
+
+extension Value {
+    static func from(databaseValue: String?) -> Self? {
+        if databaseValue == nil {
+            return nil
+        }
+        else {
+            return Self(databaseValue!)
+        }
+    }
+}
+
+extension Int: Value { }
+extension String: Value { }
+extension Bool: Value { }
+extension Double: Value { }
+extension Int64: Value { }
+
+// for converting from a raw value to what to store in the database
+extension String {
+    static func from(value: (any Value)?) -> String? {
+        if value == nil {
+            return nil
+        }
+        else {
+            return String(describing: value!)
+        }
+    }
+}
+
+func valueFrom(databaseValue: String?, type: ValueType) -> (any Value)? {
+    switch type {
+    case .int:
+        return Int.from(databaseValue: databaseValue)
+    case .string:
+        return String.from(databaseValue: databaseValue)
+    case .double:
+        return Double.from(databaseValue: databaseValue)
+    case .bool:
+        return Bool.from(databaseValue: databaseValue)
+    case .entity:
+        return Int64.from(databaseValue: databaseValue)
+    }
 }
 
 // MARK: - Entity
@@ -266,30 +281,16 @@ struct Entity: Identifiable, Equatable, Hashable {
         self.properties = [:]
         if let propertyTypes {
             for propertyType in propertyTypes {
-                // figure out which kind of value we should have
-                let value: Value
-                switch propertyType.type {
-                case .int:
-                    value = .int(nil)
-                case .string:
-                    value = .string(nil)
-                case .bool:
-                    value = .bool(nil)
-                case .double:
-                    value = .double(nil)
-                case .entity(_):
-                    value = .entity(nil)
-                }
                 
-                #warning("defaulting entityID to -2 in Entity.init")
-                let property = Property(entityID: id ?? -2, value: value)
+                #warning("defaulting entityID and propertyTypeID to -2 in Entity.init")
+                let property = Property(entityID: id ?? -2, propertyTypeID: propertyType.id ?? -2, value: nil)
                 self.properties[propertyType.id ?? -2] = property
             }
         }
         self.entityTypeID = entityTypeID
     }
     
-    func valueFor(propertyTypeID: Int64) -> Value? {
+    func valueFor(propertyTypeID: Int64) -> (any Value)? {
         return properties[propertyTypeID]?.value
     }
     
@@ -303,12 +304,12 @@ struct Entity: Identifiable, Equatable, Hashable {
     
     ///
     /// if the entity has this property, it will update its value. otherwise, it will add this property to its properties and give it the given value
-    mutating func updateValueFor(propertyTypeID: Int64, newValue: Value) {
+    mutating func updateValueFor(propertyTypeID: Int64, newValue: (any Value)?) {
         if properties[propertyTypeID] != nil {
-            properties[propertyTypeID]!.value = newValue
+            properties[propertyTypeID]!.value = .from(value: newValue)
         }
         else {
-            properties[propertyTypeID] = Property(entityID: id ?? -2, value: newValue)
+            properties[propertyTypeID] = Property(entityID: id ?? -2, propertyTypeID: propertyTypeID, value: newValue)
         }
     }
     
@@ -332,18 +333,35 @@ extension Entity: CustomStringConvertible {
 }
 
 // MARK: - Property
-struct Property: Identifiable, Equatable, Hashable {
+struct Property: Identifiable {
     public private(set) var id: Int64?
     // which entity this property is for
     var entityID: Int64
-    // TODO: we might need to have a propertyTypeID so GRDB can find us by PropertyTypeID
-    var value: Value
+    var propertyTypeID: Int64
+    var value: String?
+    
+    init(entityID: Int64, propertyTypeID: Int64, value: (any Value)?) {
+        self.entityID = entityID
+        self.propertyTypeID = propertyTypeID
+        self.value = String.from(value: value)
+    }
 
     /// if the ID has not already been set, set it to the given ID.
     mutating func initializeID(to id: Int64) {
         if self.id == nil {
             self.id = id
         }
+    }
+}
+
+extension Property: Equatable, Hashable {
+    static func == (lhs: Property, rhs: Property) -> Bool {
+        return lhs.entityID == rhs.entityID && lhs.propertyTypeID == rhs.propertyTypeID
+    }
+    
+    nonisolated func hash(into hasher: inout Hasher) {
+        entityID.hash(into: &hasher)
+        propertyTypeID.hash(into: &hasher)
     }
 }
 
@@ -380,6 +398,9 @@ extension EntityType: Codable, TableRecord, FetchableRecord, MutablePersistableR
 extension PropertyType: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
     static let entityTypeForeignKey = ForeignKey(["entityTypeID"])
     static let entityType = belongsTo(EntityType.self, using: entityTypeForeignKey)
+    
+    static let associatedEntityTypeForeignKey = ForeignKey(["associatedEntityTypeID"])
+    static let associatedEntityType = hasOne(EntityType.self, using: associatedEntityTypeForeignKey)
     
     enum Columns {
         static let name = Column(CodingKeys.name)

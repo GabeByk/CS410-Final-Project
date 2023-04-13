@@ -15,7 +15,7 @@ struct CS410_Final_ProjectApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(app: app)
+            ContentView(app: app).environment(\.schemaDatabase, .shared)
                 .onChange(of: scenePhase) { phase in
                 switch phase {
                 case .background:
@@ -25,5 +25,22 @@ struct CS410_Final_ProjectApp: App {
                 }
             }
         }
+    }
+}
+
+// MARK: - Give SwiftUI access to the database
+//
+// Define a new environment key that grants access to an AppDatabase.
+//
+// The technique is documented at
+// <https://developer.apple.com/documentation/swiftui/environmentkey>.
+private struct SchemaDatabaseKey: EnvironmentKey {
+    static var defaultValue: SchemaDatabase { .empty() }
+}
+
+extension EnvironmentValues {
+    var schemaDatabase: SchemaDatabase {
+        get { self[SchemaDatabaseKey.self] }
+        set { self[SchemaDatabaseKey.self] = newValue }
     }
 }

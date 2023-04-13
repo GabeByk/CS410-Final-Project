@@ -61,6 +61,7 @@ extension EditEntityModel: Equatable, Hashable {
 }
 
 struct EditEntity: View {
+    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditEntityModel
 
     var body: some View {

@@ -71,6 +71,7 @@ struct TableView: View {
 }
 
 struct EditTableView: View {
+    @Environment(\.schemaDatabase) private var schemaDatabase
     #warning("EditTableModel parentModel isn't weak")
     @ObservedObject var model: EditTableModel
     var body: some View {

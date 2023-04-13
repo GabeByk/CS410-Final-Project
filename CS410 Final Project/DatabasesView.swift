@@ -136,6 +136,7 @@ final class EditDatabasesModel: ViewModel {
 }
 
 struct EditDatabases: View {
+    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditDatabasesModel
     
     var body: some View {

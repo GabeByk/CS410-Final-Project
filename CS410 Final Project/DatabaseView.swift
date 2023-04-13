@@ -64,6 +64,7 @@ final class EditDatabaseModel: ViewModel {
 }
 
 struct EditDatabase: View {
+    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditDatabaseModel
     
     var body: some View {

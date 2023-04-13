@@ -40,30 +40,41 @@ final class EditPropertyModel: ViewModel {
         didSet {
             let selected = selectedType
             switch selected {
-            case ValueType.stringForString:
+            case ValueType.string.rawValue:
                 draftProperty.type = .string
-            case ValueType.stringForInt:
+                draftProperty.associatedEntityTypeID = nil
+            case ValueType.int.rawValue:
                 draftProperty.type = .int
-            case ValueType.stringForDouble:
+                draftProperty.associatedEntityTypeID = nil
+            case ValueType.double.rawValue:
                 draftProperty.type = .double
-            case ValueType.stringForBool:
+                draftProperty.associatedEntityTypeID = nil
+            case ValueType.bool.rawValue:
                 draftProperty.type = .bool
-            case ValueType.stringForEntity:
+                draftProperty.associatedEntityTypeID = nil
+            case ValueType.entity.rawValue:
                 if let id = Int64(selectedEntity) {
-                    draftProperty.type = .entity(id)
+                    draftProperty.type = .entity
+                    draftProperty.associatedEntityTypeID = id
                 }
                 else {
-                    draftProperty.type = .entity(nil)
+                    draftProperty.type = .entity
+                    draftProperty.associatedEntityTypeID = nil
                 }
             default:
                 break
             }
         }
     }
+    
     @Published var selectedEntity: String = "None" {
         didSet {
             if let id = Int64(selectedEntity) {
-                draftProperty.type = .entity(id)
+                draftProperty.type = .entity
+                draftProperty.associatedEntityTypeID = id
+            }
+            else {
+                draftProperty.associatedEntityTypeID = nil
             }
         }
     }
@@ -73,10 +84,10 @@ final class EditPropertyModel: ViewModel {
         self.property = property
         self.draftProperty = property
         self.selectedType = property.valueType
-        self.types = [ValueType.stringForString, ValueType.stringForInt, ValueType.stringForDouble, ValueType.stringForBool, ValueType.stringForEntity]
+        self.types = [ValueType.string.rawValue, ValueType.int.rawValue, ValueType.double.rawValue, ValueType.bool.rawValue, ValueType.entity.rawValue]
         super.init(isEditing: isEditing)
         if let entity = associatedEntity {
-            self.selectedEntity = String(describing: entity.id)
+            self.selectedEntity = entity.id == nil ? "None" : String(describing: entity.id!)
         }
         else {
             selectedEntity = entities.first ?? "None"
@@ -87,7 +98,7 @@ final class EditPropertyModel: ViewModel {
         let entities = parentModel?.entities ?? []
         var ids: [String] = ["None"]
         for entity in entities {
-            ids.append(String(describing: entity.id))
+            ids.append(entity.id == nil ? "Uninitialized Entity ID" : String(describing: entity.id!))
         }
         return ids
     }
@@ -96,8 +107,8 @@ final class EditPropertyModel: ViewModel {
     
     var associatedEntity: EntityType? {
         switch property.type {
-        case .entity(let id):
-            if let id {
+        case .entity:
+            if let id = property.associatedEntityTypeID {
                 return parentModel?.entityFor(id: id)
             }
             else {
@@ -117,7 +128,7 @@ final class EditPropertyModel: ViewModel {
             draftProperty = property
             selectedType = property.valueType
             if let entity = associatedEntity {
-                selectedEntity = String(describing: entity.id)
+                selectedEntity = String(describing: entity.id!)
             }
             else {
                 selectedEntity = "None"
@@ -132,6 +143,7 @@ final class EditPropertyModel: ViewModel {
 }
 
 struct EditProperty: View {
+    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditPropertyModel
     
     var editingView: some View {
@@ -156,7 +168,7 @@ struct EditProperty: View {
                     }
                 }
             }
-            if model.selectedType == ValueType.stringForEntity {
+            if model.selectedType == ValueType.entity.rawValue {
                 Section("Entity") {
                     if model.entities == [] {
                         Text("No Entities")
@@ -191,7 +203,7 @@ struct EditProperty: View {
                 }
             }
             Section("Data Type") {
-                Text(model.property.valueType == ValueType.stringForEntity ? model.associatedEntity?.name ?? "Entity not chosen" : model.property.valueType)
+                Text(model.property.valueType == ValueType.entity.rawValue ? model.associatedEntity?.name ?? "Entity not chosen" : model.property.valueType)
             }
         }
     }

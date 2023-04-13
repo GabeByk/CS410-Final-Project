@@ -35,6 +35,7 @@ extension EditEntityModel: PropertiesSaver {
 }
 
 final class EditPropertiesModel: ViewModel {
+    @Environment(\.schemaDatabase) private var schemaDatabase
     #warning("EditPropertiesModel parentModel isn't weak")
     var parentModel: PropertiesSaver?
     @Published var entity: EntityType
