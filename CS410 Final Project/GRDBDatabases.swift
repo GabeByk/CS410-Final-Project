@@ -69,7 +69,7 @@ struct SchemaDatabase {
                        .references("table", onDelete: .cascade)
                }
                
-               try db.create(table: "column") { t in
+               try db.create(table: "value") { t in
                    t.autoIncrementedPrimaryKey("id")
                    t.column("rowID", .integer)
                        .notNull()
