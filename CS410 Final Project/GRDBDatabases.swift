@@ -36,7 +36,7 @@ struct SchemaDatabase {
                    t.column("name", .text).notNull()
                }
                
-               try db.create(table: "entityType") { t in
+               try db.create(table: "table") { t in
                    t.autoIncrementedPrimaryKey("id")
                    t.column("databaseID", .integer)
                        .notNull()
@@ -46,40 +46,40 @@ struct SchemaDatabase {
                    t.column("shouldShow", .boolean)
                }
                
-               try db.create(table: "propertyType") { t in
+               try db.create(table: "column") { t in
                    t.autoIncrementedPrimaryKey("id")
-                   t.column("entityTypeID", .integer)
+                   t.column("tableID", .integer)
                        .notNull()
                        .indexed()
-                       .references("entityType", onDelete: .cascade)
-                   t.column("associatedEntityTypeID", .integer)
+                       .references("table", onDelete: .cascade)
+                   t.column("associatedTableID", .integer)
                        .indexed()
-                       .references("entityType", onDelete: .setNull)
+                       .references("table", onDelete: .setNull)
                    t.column("name", .text)
                    t.column("isPrimary", .boolean)
                    // TODO: this column is a raw value of the ValueType enum; do I need to put that here somehow, or can I just use .text?
                    t.column("type", .text)
                }
                
-               try db.create(table: "entity") { t in
+               try db.create(table: "row") { t in
                    t.autoIncrementedPrimaryKey("id")
-                   t.column("entityTypeID", .integer)
+                   t.column("tableID", .integer)
                        .notNull()
                        .indexed()
-                       .references("entityType", onDelete: .cascade)
+                       .references("table", onDelete: .cascade)
                }
                
-               try db.create(table: "property") { t in
+               try db.create(table: "column") { t in
                    t.autoIncrementedPrimaryKey("id")
-                   t.column("entityID", .integer)
+                   t.column("rowID", .integer)
                        .notNull()
                        .indexed()
-                       .references("entity", onDelete: .cascade)
-                   t.column("propertyTypeID", .integer)
+                       .references("row", onDelete: .cascade)
+                   t.column("columnID", .integer)
                        .notNull()
                        .indexed()
-                       .references("propertyType", onDelete: .cascade)
-                   // TODO: this column is the value of an optional string that our associated propertyType tells us how to interpret
+                       .references("column", onDelete: .cascade)
+                   // TODO: this column is the value of an optional string that our associated column tells us how to interpret
                     t.column("value", .text)
                }
            }

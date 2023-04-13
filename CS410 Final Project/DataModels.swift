@@ -7,23 +7,23 @@
 
 import Foundation
 import IdentifiedCollections
-// used for the EntityType and PropertyType's static properties for their images
+// used for the DatabaseTable and DatabaseColumn's static properties for their images
 import SwiftUI
 import GRDB
 
-// TODO: pressing the add button on any menu no longer allows adding multiple (databases, entites and, properties); this is because it's not linked to the database and another is created with ID -2
+// TODO: pressing the add button on any menu no longer allows adding multiple (databases, tables and, columns); this is because it's not linked to the database and another is created with ID -2
 // TODO?: can the constructor automatically add the item to the database so the id is never nil and/or is that a good idea?
 // TODO?: can GRDB deal with Tagged<Self, Int64> as ID's data type and/or is that a good idea?
 
 struct Database: Identifiable {
     public private(set) var id: Int64?
     var name: String
-    // TODO: use GRDB to store and access Database.entities; maybe this should be a computed property
-    var entities: IdentifiedArrayOf<EntityType>
+    // TODO: use GRDB to store and access Database.tables; maybe this should be a computed property
+    var tables: IdentifiedArrayOf<DatabaseTable>
     
-    init(name: String, id: Int64? = nil, entities: IdentifiedArrayOf<EntityType> = []) {
+    init(name: String, id: Int64? = nil, tables: IdentifiedArrayOf<DatabaseTable> = []) {
         self.name = name
-        self.entities = entities
+        self.tables = tables
         self.id = id
     }
     
@@ -40,7 +40,7 @@ extension Database {
     }
     
     static var mockDatabase: Database {
-        return Database(name: "Database A", id: -1, entities: [.mockEntityType])
+        return Database(name: "Database A", id: -1, tables: [.mockDatabaseTable])
     }
 }
 
@@ -50,35 +50,35 @@ extension Database: Equatable, Hashable {
     }
 }
 
-// MARK: - EntityType
+// MARK: - DatabaseTable
 
-struct EntityType: Identifiable, Equatable, Hashable{
+struct DatabaseTable: Identifiable, Equatable, Hashable{
     // while the primary key should identify it, we want our own ID in case the user wants to change the primary key later
     public private(set) var id: Int64?
     // which database this belongs to
     var databaseID: Int64
     
     enum PrimaryKey: Equatable, Hashable {
-        case id(EntityType.ID)
-        case property(PropertyType)
-        case properties([PropertyType])
+        case id(DatabaseTable.ID)
+        case column(DatabaseColumn)
+        case columns([DatabaseColumn])
     }
     
     var name: String
     // TODO: don't encode and decode instances in AppModel.schemaFilename, since that info will go in the database using GRDB.
-    // TODO: use GRDB to access entities
-    var entities: IdentifiedArrayOf<Entity>
+    // TODO: use GRDB to access rows
+    var rows: IdentifiedArrayOf<DatabaseRow>
     // TODO?: is this functionality necessary? having to show helper tables to work on them and add data will be kind of annoying
     var shouldShow: Bool
     
-    // TODO: use GRDB to access properties
-    var properties: IdentifiedArrayOf<PropertyType>
+    // TODO: use GRDB to access columns
+    var columns: IdentifiedArrayOf<DatabaseColumn>
     
-    init(name: String, shouldShow: Bool = true, id: Int64? = nil, properties: IdentifiedArrayOf<PropertyType> = [], entities: IdentifiedArrayOf<Entity> = [], databaseID: Int64) {
+    init(name: String, shouldShow: Bool = true, id: Int64? = nil, columns: IdentifiedArrayOf<DatabaseColumn> = [], rows: IdentifiedArrayOf<DatabaseRow> = [], databaseID: Int64) {
         self.name = name
         self.shouldShow = shouldShow
-        self.entities = entities
-        self.properties = properties
+        self.rows = rows
+        self.columns = columns
         self.id = id
         self.databaseID = databaseID
     }
@@ -89,67 +89,67 @@ struct EntityType: Identifiable, Equatable, Hashable{
         }
     }
     
-    mutating func removeProperty(_ property: PropertyType) {
-        properties.remove(property)
-        for var instance in entities {
-            if let id = property.id {
-                instance.removeValueFor(propertyTypeID: id)
+    mutating func removeColumn(_ column: DatabaseColumn) {
+        columns.remove(column)
+        for var instance in rows {
+            if let id = column.id {
+                instance.removeValueFor(columnID: id)
             }
         }
     }
     
-    mutating func removeProperties(at offsets: IndexSet) {
+    mutating func removeColumns(at offsets: IndexSet) {
         for index in offsets {
-            let property = properties[index]
-            removeProperty(property)
+            let column = columns[index]
+            removeColumn(column)
         }
     }
     
-    mutating func addProperty(_ property: PropertyType) {
-        properties[id: property.id] = property
-        for var instance in entities {
-            if let id = property.id {
-                instance.updateValueFor(propertyTypeID: id, newValue: nil)
+    mutating func addColumn(_ column: DatabaseColumn) {
+        columns[id: column.id] = column
+        for var instance in rows {
+            if let id = column.id {
+                instance.updateValueFor(columnID: id, newValue: nil)
             }
         }
     }
     
     mutating func addInstance() {
-        #warning("defaulting entityTypeID to -2 in EntityType.addInstance")
-        entities.append(.empty(entityTypeID: id ?? -2))
+        #warning("defaulting tableID to -2 in DatabaseTable.addInstance")
+        rows.append(.empty(tableID: id ?? -2))
     }
     
-    // could probably be a computed property but it's theta(n) for n properties, so it's a function
+    // could probably be a computed property but it's theta(n) for n columns, so it's a function
     ///
-    /// Determines which PrimaryKey case is appropriate for this entity, and returns it.
-    /// - Returns: PrimaryKey.id(self.id) if no properties are primary, PrimaryKey.property with the member of self.properties marked primary if only one is found,
-    /// or PrimaryKey.properties with all properties marked primary if more than one is found.
+    /// Determines which PrimaryKey case is appropriate for this table, and returns it.
+    /// - Returns: PrimaryKey.id(self.id) if no columns are primary, PrimaryKey.column with the member of self.columns marked primary if only one is found,
+    /// or PrimaryKey.columns with all columns marked primary if more than one is found.
     func primaryKey() -> PrimaryKey {
-        var key: [PropertyType] = []
-        for property in properties {
-            if property.isPrimary {
-                key.append(property)
+        var key: [DatabaseColumn] = []
+        for column in columns {
+            if column.isPrimary {
+                key.append(column)
             }
         }
         if key.count == 0 {
             return .id(id)
         }
         else if key.count == 1 {
-            return .property(key[0])
+            return .column(key[0])
         }
         else {
-            return .properties(key)
+            return .columns(key)
         }
     }
 }
 
-extension EntityType {
-    static func empty(databaseID: Int64) -> EntityType {
-        return EntityType(name: "", databaseID: databaseID)
+extension DatabaseTable {
+    static func empty(databaseID: Int64) -> DatabaseTable {
+        return DatabaseTable(name: "", databaseID: databaseID)
     }
     
-    static var mockEntityType: EntityType {
-        return EntityType(name: "Entity A", id: -1, properties: [.mockPropertyType], databaseID: -1)
+    static var mockDatabaseTable: DatabaseTable {
+        return DatabaseTable(name: "Table A", id: -1, columns: [.mockColumn], databaseID: -1)
     }
     
     static func shouldShowImage(shouldShow: Bool) -> Image {
@@ -164,28 +164,28 @@ enum ValueType: String, Equatable, Hashable, Codable, DatabaseValueConvertible {
     case string = "Text"
     case bool = "True or False"
     case double = "Decimal"
-    case entity = "Entity"
+    case table = "Table"
 }
 
-// MARK: - PropertyType
+// MARK: - DatabaseColumn
 
-struct PropertyType: Identifiable, Equatable, Hashable {
+struct DatabaseColumn: Identifiable, Equatable, Hashable {
     public private(set) var id: Int64?
-    /// whether this property is part of the primary key for its entity. a property should be marked as primary if the value of all primary properties for an entity are enough to uniquely determine which instance has those properties.
+    /// whether this column is part of the primary key for its table. a column should be marked as primary if the value of all primary columns for a table are enough to uniquely determine which row has those values.
     var isPrimary: Bool
     var name: String
     var type: ValueType
-    // if type is .entity, which EntityType this PropertyType holds
-    var associatedEntityTypeID: Int64?
-    // which EntityType holds this property
-    var entityTypeID: Int64
+    // if type is .table, which DatabaseTable this DatabaseColumn holds
+    var associatedTableID: Int64?
+    // which DatabaseTable holds this column
+    var tableID: Int64
     
-    init(name: String, type: ValueType, isPrimary: Bool = false, id: Int64? = nil, entityTypeID: Int64) {
+    init(name: String, type: ValueType, isPrimary: Bool = false, id: Int64? = nil, tableID: Int64) {
         self.name = name
         self.type = type
         self.isPrimary = isPrimary
         self.id = id
-        self.entityTypeID = entityTypeID
+        self.tableID = tableID
     }
     
     mutating func initializeID(to id: Int64) {
@@ -195,17 +195,17 @@ struct PropertyType: Identifiable, Equatable, Hashable {
     }
 }
 
-extension PropertyType {
+extension DatabaseColumn {
     var valueType: String {
         return type.rawValue
     }
     
-    static func empty(entityTypeID: Int64) -> PropertyType {
-        return PropertyType(name: "", type: .string, entityTypeID: entityTypeID)
+    static func empty(tableID: Int64) -> DatabaseColumn {
+        return DatabaseColumn(name: "", type: .string, tableID: tableID)
     }
     
-    static var mockPropertyType: PropertyType {
-        return PropertyType(name: "Property A", type: .string, id: -1, entityTypeID: -1)
+    static var mockColumn: DatabaseColumn {
+        return DatabaseColumn(name: "Column A", type: .string, id: -1, tableID: -1)
     }
     
     static func primaryKeyImage(isPrimary: Bool) -> Image {
@@ -215,14 +215,14 @@ extension PropertyType {
 
 // MARK: - Value
 
-protocol Value: Equatable, Hashable, Codable, CustomStringConvertible {
+protocol StoredValue: Equatable, Hashable, Codable, CustomStringConvertible {
     ///
     /// - returns: nil if the value passed is nil, otherwise the result of running the constructor on the unwrapped value; implemented automatically using the required failable init
     static func from(databaseValue: String?) -> Self?
     init?(_ _: String)
 }
 
-extension Value {
+extension StoredValue {
     static func from(databaseValue: String?) -> Self? {
         if databaseValue == nil {
             return nil
@@ -233,15 +233,15 @@ extension Value {
     }
 }
 
-extension Int: Value { }
-extension String: Value { }
-extension Bool: Value { }
-extension Double: Value { }
-extension Int64: Value { }
+extension Int: StoredValue { }
+extension String: StoredValue { }
+extension Bool: StoredValue { }
+extension Double: StoredValue { }
+extension Int64: StoredValue { }
 
 // for converting from a raw value to what to store in the database
 extension String {
-    static func from(value: (any Value)?) -> String? {
+    static func from(value: (any StoredValue)?) -> String? {
         if value == nil {
             return nil
         }
@@ -251,7 +251,7 @@ extension String {
     }
 }
 
-func valueFrom(databaseValue: String?, type: ValueType) -> (any Value)? {
+func valueFrom(databaseValue: String?, type: ValueType) -> (any StoredValue)? {
     switch type {
     case .int:
         return Int.from(databaseValue: databaseValue)
@@ -261,37 +261,37 @@ func valueFrom(databaseValue: String?, type: ValueType) -> (any Value)? {
         return Double.from(databaseValue: databaseValue)
     case .bool:
         return Bool.from(databaseValue: databaseValue)
-    case .entity:
+    case .table:
         return Int64.from(databaseValue: databaseValue)
     }
 }
 
-// MARK: - Entity
+// MARK: - DatabaseRow
 
-struct Entity: Identifiable, Equatable, Hashable {
+struct DatabaseRow: Identifiable, Equatable, Hashable {
     public private(set) var id: Int64?
-    // which EntityType this is an instance of
-    var entityTypeID: Int64
+    // which DatabaseTable this is an instance of
+    var tableID: Int64
     // https://developer.apple.com/documentation/swift/dictionary
-    // TODO: use GRDB to access Properties by PropertyType ID (if possible?)
-    var properties: Dictionary<Int64, Property>
+    // TODO: use GRDB to access Columns by DatabaseColumn ID (if possible?)
+    var columns: Dictionary<Int64, DatabaseValue>
     
-    init(propertyTypes: IdentifiedArrayOf<PropertyType>? = nil, id: Int64? = nil, entityTypeID: Int64) {
+    init(columns: IdentifiedArrayOf<DatabaseColumn>? = nil, id: Int64? = nil, tableID: Int64) {
         self.id = id
-        self.properties = [:]
-        if let propertyTypes {
-            for propertyType in propertyTypes {
+        self.columns = [:]
+        if let columns {
+            for column in columns {
                 
-                #warning("defaulting entityID and propertyTypeID to -2 in Entity.init")
-                let property = Property(entityID: id ?? -2, propertyTypeID: propertyType.id ?? -2, value: nil)
-                self.properties[propertyType.id ?? -2] = property
+                #warning("defaulting rowID and columnID to -2 in DatabaseRow.init")
+                let column = DatabaseValue(rowID: id ?? -2, columnID: column.id ?? -2, value: nil)
+                self.columns[column.id ?? -2] = column
             }
         }
-        self.entityTypeID = entityTypeID
+        self.tableID = tableID
     }
     
-    func valueFor(propertyTypeID: Int64) -> (any Value)? {
-        return properties[propertyTypeID]?.value
+    func valueFor(columnID: Int64) -> (any StoredValue)? {
+        return columns[columnID]?.value
     }
     
     ///
@@ -303,46 +303,46 @@ struct Entity: Identifiable, Equatable, Hashable {
     }
     
     ///
-    /// if the entity has this property, it will update its value. otherwise, it will add this property to its properties and give it the given value
-    mutating func updateValueFor(propertyTypeID: Int64, newValue: (any Value)?) {
-        if properties[propertyTypeID] != nil {
-            properties[propertyTypeID]!.value = .from(value: newValue)
+    /// if the row has this column, it will update its value. otherwise, it will add this column to its columns and give it the given value
+    mutating func updateValueFor(columnID: Int64, newValue: (any StoredValue)?) {
+        if columns[columnID] != nil {
+            columns[columnID]!.value = .from(value: newValue)
         }
         else {
-            properties[propertyTypeID] = Property(entityID: id ?? -2, propertyTypeID: propertyTypeID, value: newValue)
+            columns[columnID] = DatabaseValue(rowID: id ?? -2, columnID: columnID, value: newValue)
         }
     }
     
-    mutating func removeValueFor(propertyTypeID: Int64) {
+    mutating func removeValueFor(columnID: Int64) {
         // assigning a dictionary's value for a given type sets it to nil
-        properties[propertyTypeID] = nil
+        columns[columnID] = nil
     }
 }
 
-extension Entity {
-    // TODO: empty as an instance method of the parent class instead? or even the addEntity makes its own instead of using this
-    static func empty(entityTypeID: Int64) -> Entity {
-        return Entity(entityTypeID: entityTypeID)
+extension DatabaseRow {
+    // TODO: empty as an instance method of the parent class instead? or even the addRow makes its own instead of using this
+    static func empty(tableID: Int64) -> DatabaseRow {
+        return DatabaseRow(tableID: tableID)
     }
 }
 
-extension Entity: CustomStringConvertible {
+extension DatabaseRow: CustomStringConvertible {
     var description: String {
         return String(describing: id)
     }
 }
 
-// MARK: - Property
-struct Property: Identifiable {
+// MARK: - DatabaseValue
+struct DatabaseValue: Identifiable {
     public private(set) var id: Int64?
-    // which entity this property is for
-    var entityID: Int64
-    var propertyTypeID: Int64
+    // which row this value is for
+    var rowID: Int64
+    var columnID: Int64
     var value: String?
     
-    init(entityID: Int64, propertyTypeID: Int64, value: (any Value)?) {
-        self.entityID = entityID
-        self.propertyTypeID = propertyTypeID
+    init(rowID: Int64, columnID: Int64, value: (any StoredValue)?) {
+        self.rowID = rowID
+        self.columnID = columnID
         self.value = String.from(value: value)
     }
 
@@ -354,21 +354,21 @@ struct Property: Identifiable {
     }
 }
 
-extension Property: Equatable, Hashable {
-    static func == (lhs: Property, rhs: Property) -> Bool {
-        return lhs.entityID == rhs.entityID && lhs.propertyTypeID == rhs.propertyTypeID
+extension DatabaseValue: Equatable, Hashable {
+    static func == (lhs: DatabaseValue, rhs: DatabaseValue) -> Bool {
+        return lhs.rowID == rhs.rowID && lhs.columnID == rhs.columnID
     }
     
     nonisolated func hash(into hasher: inout Hasher) {
-        entityID.hash(into: &hasher)
-        propertyTypeID.hash(into: &hasher)
+        rowID.hash(into: &hasher)
+        columnID.hash(into: &hasher)
     }
 }
 
 // MARK: - GRDB setup
 
 extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    static let entities = hasMany(EntityType.self, using: EntityType.databaseForeignKey)
+    static let tables = hasMany(DatabaseTable.self, using: DatabaseTable.databaseForeignKey)
     enum Columns {
         static let name = Column(CodingKeys.name)
     }
@@ -378,12 +378,12 @@ extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRec
     }
 }
 
-extension EntityType: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+extension DatabaseTable: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
     static let databaseForeignKey = ForeignKey(["databaseID"])
     static let database = belongsTo(Database.self, using: databaseForeignKey)
     
-    static let properties = hasMany(PropertyType.self, using: PropertyType.entityTypeForeignKey)
-    static let entities = hasMany(Entity.self, using: Entity.entityTypeForeignKey)
+    static let rows = hasMany(DatabaseRow.self, using: DatabaseRow.tableForeignKey)
+    static let columns = hasMany(DatabaseColumn.self, using: DatabaseColumn.tableForeignKey)
     
     enum Columns {
         static let name = Column(CodingKeys.name)
@@ -395,12 +395,12 @@ extension EntityType: Codable, TableRecord, FetchableRecord, MutablePersistableR
     }
 }
 
-extension PropertyType: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    static let entityTypeForeignKey = ForeignKey(["entityTypeID"])
-    static let entityType = belongsTo(EntityType.self, using: entityTypeForeignKey)
+extension DatabaseColumn: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let tableForeignKey = ForeignKey(["tableID"])
+    static let table = belongsTo(DatabaseTable.self, using: tableForeignKey)
     
-    static let associatedEntityTypeForeignKey = ForeignKey(["associatedEntityTypeID"])
-    static let associatedEntityType = hasOne(EntityType.self, using: associatedEntityTypeForeignKey)
+    static let associatedTableForeignKey = ForeignKey(["associatedTableID"])
+    static let associatedTable = hasOne(DatabaseTable.self, using: associatedTableForeignKey)
     
     enum Columns {
         static let name = Column(CodingKeys.name)
@@ -413,21 +413,21 @@ extension PropertyType: Codable, TableRecord, FetchableRecord, MutablePersistabl
     }
 }
 
-extension Entity: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    static let entityTypeForeignKey = ForeignKey(["entityTypeID"])
-    static let entityType = belongsTo(EntityType.self, using: entityTypeForeignKey)
+extension DatabaseRow: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let tableForeignKey = ForeignKey(["tableID"])
+    static let table = belongsTo(DatabaseTable.self, using: tableForeignKey)
     
-    // TODO: does this need to have a different using to look up by PropertyType ID?
-    static let properties = hasMany(Property.self, using: Property.entityForeignKey)
+    // TODO: does this need to have a different using to look up by DatabaseColumn ID?
+    static let columns = hasMany(DatabaseValue.self, using: DatabaseValue.rowForeignKey)
     
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID
     }
 }
 
-extension Property: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    static let entityForeignKey = ForeignKey(["entityID"])
-    static let entity = belongsTo(Entity.self, using: entityForeignKey)
+extension DatabaseValue: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    static let rowForeignKey = ForeignKey(["rowID"])
+    static let row = belongsTo(DatabaseRow.self, using: rowForeignKey)
     
     enum Columns {
         static let value = Column(CodingKeys.value)

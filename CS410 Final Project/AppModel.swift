@@ -10,8 +10,8 @@ import IdentifiedCollections
 
 enum NavigationPathCase: Equatable, Hashable {
     case database(EditDatabaseModel)
-    case entity(EditEntityModel)
-    case property(EditPropertyModel)
+    case table(EditDatabaseTableModel)
+    case column(EditColumnModel)
 }
 
 @MainActor
@@ -77,11 +77,11 @@ extension AppModel {
         return app
     }
     
-    static var mockEntity: AppModel {
+    static var mockTable: AppModel {
         let app: AppModel = .mockDatabase
         switch app.navigationPath[0] {
         case let .database(model):
-            app.navigationPath.append(.entity(EditEntityModel(parentModel: model, entity: model.entities[0])))
+            app.navigationPath.append(.table(EditDatabaseTableModel(parentModel: model, table: model.tables[0])))
         default:
             break
         }

@@ -26,10 +26,10 @@ func navigateTo(item: NavigationPathCase) -> some View {
     switch item {
     case let .database(model):
         return AnyView(EditDatabase(model: model))
-    case let .entity(model):
-        return AnyView(EditEntity(model: model))
-    case let .property(model):
-        return AnyView(EditProperty(model: model))
+    case let .table(model):
+        return AnyView(EditTable(model: model))
+    case let .column(model):
+        return AnyView(EditColumn(model: model))
     }
 }
 

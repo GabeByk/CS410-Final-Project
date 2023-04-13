@@ -1,5 +1,5 @@
 //
-//  EntityTableView.swift
+//  TableRowView.swift
 //  CS410 Final Project
 //
 //  Created by Gabe Byk on 3/30/23.
@@ -9,63 +9,60 @@ import SwiftUI
 
 
 protocol TableSaver: AnyObject {
-    func updateEntity(entity: EntityType)
+    func updateTable(_ table: DatabaseTable)
     func exitTableView()
 }
 
-extension EditEntityModel: TableSaver {
+extension EditDatabaseTableModel: TableSaver {
     func exitTableView() {
-        state = .properties
+        state = .columns
     }
 }
 
 final class EditTableModel: ViewModel {
     var parentModel: TableSaver?
-    @Published var entity: EntityType
-    @Published var draftEntity: EntityType
+    @Published var table: DatabaseTable
+    @Published var draftTable: DatabaseTable
     
-    init(parentModel: TableSaver? = nil, entity: EntityType, isEditing: Bool = false) {
+    init(parentModel: TableSaver? = nil, table: DatabaseTable, isEditing: Bool = false) {
         self.parentModel = parentModel
-        self.entity = entity
-        self.draftEntity = entity
+        self.table = table
+        self.draftTable = table
         super.init(isEditing: isEditing)
     }
     
     override func editButtonPressed() {
         if isEditing {
-            entity = draftEntity
-            parentModel?.updateEntity(entity: entity)
+            table = draftTable
+            parentModel?.updateTable(table)
         }
         else {
-            draftEntity = entity
+            draftTable = table
         }
         isEditing.toggle()
     }
     
-    func viewPropertiesPressed() {
+    func viewColumnsPressed() {
         parentModel?.exitTableView()
     }
 }
 
 struct TableView: View {
-    let entity: EntityType
+    let table: DatabaseTable
     
     // TODO?: does GRDB have an easy way to show a table?
     var body: some View {
         // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-multi-column-lists-using-table
         // https://developer.apple.com/documentation/swiftui/table
-        Table(of: Entity.self) {
-            TableColumn("\(entity.name)") { entity in
+        Table(of: DatabaseRow.self) {
+            TableColumn("\(table.name)") { table in
                 HStack {
-                    Text(entity.description)
-//                        ForEach(entity.values.keys, id: \.self) { key in
-//                            Text("\(entity.values[key]!)")
-//                        }
+                    Text(table.description)
                 }
             }
         } rows: {
-            // TODO: each row navigates to an Entity's own view that allows you to edit its fields. Looks like the EntityType's view, but allows you to enter information for each property rather than allowing you to edit the properties
-            ForEach(entity.entities, content: TableRow.init)
+            // TODO: each row navigates to its own view that allows you to edit its fields. Looks like the DatabaseTable's view, but allows you to enter information for each column rather than allowing you to edit the columns
+            ForEach(table.rows, content: TableRow.init)
         }
     }
 }
@@ -84,25 +81,25 @@ struct EditTableView: View {
     
     var editingTableView: some View {
         VStack {
-            TableView(entity: model.draftEntity)
+            TableView(table: model.draftTable)
             Button("Add Row") {
-                model.draftEntity.addInstance()
+                model.draftTable.addInstance()
             }
         }
     }
     
     var tableView: some View {
         VStack {
-            TableView(entity: model.entity)
-            Button("View Properties") {
-                model.viewPropertiesPressed()
+            TableView(table: model.table)
+            Button("View Columns") {
+                model.viewColumnsPressed()
             }
         }
     }
 }
 
-struct EntityTableView_Previews: PreviewProvider {
+struct TableRowView_Preview: PreviewProvider {
     static var previews: some View {
-        EditEntity_Previews.previews
+        TableView_Preview.previews
     }
 }

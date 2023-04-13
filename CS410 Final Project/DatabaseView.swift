@@ -53,13 +53,13 @@ final class EditDatabaseModel: ViewModel {
         isEditing = false
     }
     
-    func addEntity() {
-        #warning("defaulting draftDatabaseID to -2 in EditDatabaseModel.addEntity")
-        draftDatabase.entities.append(.empty(databaseID: draftDatabase.id ?? -2))
+    func addTable() {
+        #warning("defaulting draftDatabaseID to -2 in EditDatabaseModel.addTable")
+        draftDatabase.tables.append(.empty(databaseID: draftDatabase.id ?? -2))
     }
     
-    func removeEntities(at offsets: IndexSet) {
-        draftDatabase.entities.remove(atOffsets: offsets)
+    func removeTables(at offsets: IndexSet) {
+        draftDatabase.tables.remove(atOffsets: offsets)
     }
 }
 
@@ -80,28 +80,28 @@ struct EditDatabase: View {
             Section("Database") {
                 TextField("Database Name", text: $model.draftDatabase.name)
             }
-            Section("Entity") {
-                ForEach($model.draftDatabase.entities) { $entity in
+            Section("Tables") {
+                ForEach($model.draftDatabase.tables) { $table in
                     HStack {
-                        TextField("Entity Name", text: $entity.name)
+                        TextField("Table Name", text: $table.name)
                         Spacer()
                         Button {
-                            entity.shouldShow.toggle()
+                            table.shouldShow.toggle()
                         } label: {
-                            EntityType.shouldShowImage(shouldShow: entity.shouldShow)
+                            DatabaseTable.shouldShowImage(shouldShow: table.shouldShow)
                         }
                     }
                 }
-                .onDelete(perform: removeEntities)
-                Button("Add Entity") {
-                    model.addEntity()
+                .onDelete(perform: removeTables)
+                Button("Add Table") {
+                    model.addTable()
                 }
             }
         }
     }
     
-    func removeEntities(at offsets: IndexSet) {
-        model.removeEntities(at: offsets)
+    func removeTables(at offsets: IndexSet) {
+        model.removeTables(at: offsets)
     }
     
     var navigatingView: some View {
@@ -109,16 +109,16 @@ struct EditDatabase: View {
             Section("Database") {
                 Text(model.database.name)
             }
-            Section("Entities") {
-                ForEach(model.database.entities) { entity in
-                    if entity.shouldShow {
-                        NavigationLink(value: NavigationPathCase.entity(EditEntityModel(parentModel: model, entity: entity))) {
-                            Text(entity.name)
+            Section("Tables") {
+                ForEach(model.database.tables) { table in
+                    if table.shouldShow {
+                        NavigationLink(value: NavigationPathCase.table(EditDatabaseTableModel(parentModel: model, table: table))) {
+                            Text(table.name)
                         }
                     }
                 }
-                if model.database.entities.count == 0 {
-                    Text("Try adding some entities in the edit view!")
+                if model.database.tables.count == 0 {
+                    Text("Try adding some tables in the edit view!")
                 }
             }
         }

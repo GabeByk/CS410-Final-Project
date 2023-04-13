@@ -1,5 +1,5 @@
 //
-//  EditPropertiesView.swift
+//  EditColumnsView.swift
 //  CS410 Final Project
 //
 //  Created by Gabe Byk on 3/30/23.
@@ -8,60 +8,60 @@
 import SwiftUI
 import IdentifiedCollections
 
-protocol PropertiesSaver: AnyObject {
-    func updateEntity(entity: EntityType)
-    func exitPropertiesView()
-    func entityFor(id: EntityType.ID) -> EntityType?
-    var entities: IdentifiedArrayOf<EntityType> { get }
+protocol ColumnsSaver: AnyObject {
+    func updateTable(_ table: DatabaseTable)
+    func exitColumnsView()
+    func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
+    var tables: IdentifiedArrayOf<DatabaseTable> { get }
 }
 
-extension EditEntityModel: PropertiesSaver {
-    func updateEntity(entity: EntityType) {
-        self.entity = entity
-        parentModel?.updateEntity(entity: entity)
+extension EditDatabaseTableModel: ColumnsSaver {
+    func updateTable(_ table: DatabaseTable) {
+        self.table = table
+        parentModel?.updateTable(table: table)
     }
     
-    func exitPropertiesView() {
+    func exitColumnsView() {
         state = .table
     }
     
-    func entityFor(id: EntityType.ID) -> EntityType? {
-        parentModel?.entityFor(id: id)
+    func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
+        parentModel?.tableFor(id: id)
     }
     
-    var entities: IdentifiedArrayOf<EntityType> {
-        parentModel?.entities ?? []
+    var tables: IdentifiedArrayOf<DatabaseTable> {
+        parentModel?.tables ?? []
     }
 }
 
-final class EditPropertiesModel: ViewModel {
+final class EditColumnsModel: ViewModel {
     @Environment(\.schemaDatabase) private var schemaDatabase
-    #warning("EditPropertiesModel parentModel isn't weak")
-    var parentModel: PropertiesSaver?
-    @Published var entity: EntityType
-    @Published var draftEntity: EntityType
+    #warning("EditColumnsModel parentModel isn't weak")
+    var parentModel: ColumnsSaver?
+    @Published var table: DatabaseTable
+    @Published var draftTable: DatabaseTable
     
-    // TODO?: entity with no properties defaults to .properties, but entity with properties defaults to .table? maybe entity with instances defaults to .table, so you have to switch to the table view when you add your first instance?
-    init(parentModel: PropertiesSaver? = nil, entity: EntityType, isEditing: Bool = false) {
+    // TODO?: table with no columns defaults to .columns, but table with columns defaults to .table? maybe table with rows defaults to .table, so you have to switch to the table view when you add your first row?
+    init(parentModel: ColumnsSaver? = nil, table: DatabaseTable, isEditing: Bool = false) {
         self.parentModel = parentModel
-        self.entity = entity
-        self.draftEntity = entity
+        self.table = table
+        self.draftTable = table
         super.init(isEditing: isEditing)
     }
     
     func viewTablePressed() {
-        parentModel?.exitPropertiesView()
+        parentModel?.exitColumnsView()
     }
     
     override func editButtonPressed() {
         // TODO?: what causes runtime warning "Publishing changes from within view updates is not allowed, this will cause undefined behavior."?
         // something I changed seems to have fixed it?
         if isEditing {
-            entity = draftEntity
-            parentModel?.updateEntity(entity: draftEntity)
+            table = draftTable
+            parentModel?.updateTable(draftTable)
         }
         else {
-            draftEntity = entity
+            draftTable = table
         }
         isEditing.toggle()
     }
@@ -70,104 +70,104 @@ final class EditPropertiesModel: ViewModel {
         isEditing = false
     }
     
-    func addProperty() {
-        #warning("defaulting entityTypeID to -2 in EditPropertiesModel.addProperty")
-        draftEntity.addProperty(.empty(entityTypeID: draftEntity.id ?? -2))
+    func addColumn() {
+        #warning("defaulting tableID to -2 in EditColumnsModel.addColumn")
+        draftTable.addColumn(.empty(tableID: draftTable.id ?? -2))
     }
     
-    func removeProperties(at offsets: IndexSet) {
-        draftEntity.removeProperties(at: offsets)
+    func removeColumns(at offsets: IndexSet) {
+        draftTable.removeColumns(at: offsets)
     }
     
 }
 
-struct EditPropertiesView: View {
-    @ObservedObject var model: EditPropertiesModel
+struct EditColumnsView: View {
+    @ObservedObject var model: EditColumnsModel
     
     var body: some View {
         ModelDrivenView(model: model) {
-            editingPropertiesView
+            editingColumnsView
         } nonEditingView: {
-            propertiesView
+            columnsView
         }
     }
     
-    var editingPropertiesView: some View {
+    var editingColumnsView: some View {
         Form {
-            Section("Entity") {
+            Section("Table") {
                 HStack {
-                    TextField("Entity Name", text: $model.draftEntity.name)
+                    TextField("Table Name", text: $model.draftTable.name)
                     Spacer()
                     Button {
-                        model.draftEntity.shouldShow.toggle()
+                        model.draftTable.shouldShow.toggle()
                     } label: {
-                        EntityType.shouldShowImage(shouldShow: model.draftEntity.shouldShow)
+                        DatabaseTable.shouldShowImage(shouldShow: model.draftTable.shouldShow)
                     }
                 }
             }
-            Section("Properties") {
-                ForEach($model.draftEntity.properties) { $property in
+            Section("Columns") {
+                ForEach($model.draftTable.columns) { $column in
                     HStack {
-                        TextField("Property Name", text: $property.name)
+                        TextField("Column Name", text: $column.name)
                         Spacer()
                         Button {
-                            property.isPrimary.toggle()
+                            column.isPrimary.toggle()
                         } label: {
                             // TODO: have a pop-up tutorial type thing about what a primary key is, etc
-                            PropertyType.primaryKeyImage(isPrimary: property.isPrimary)
+                            DatabaseColumn.primaryKeyImage(isPrimary: column.isPrimary)
                         }
                         .buttonStyle(.borderless)
                         .tint(.red)
                     }
                 }
-                .onDelete(perform: removeProperties)
-                Button("Add Property") {
-                    model.addProperty()
+                .onDelete(perform: removeColumns)
+                Button("Add Column") {
+                    model.addColumn()
                 }
             }
         }
     }
     
-    func removeProperties(at offsets: IndexSet) {
-        model.removeProperties(at: offsets)
+    func removeColumns(at offsets: IndexSet) {
+        model.removeColumns(at: offsets)
     }
     
-    var propertiesView: some View {
+    var columnsView: some View {
         VStack {
             List {
-                Section("Entity") {
+                Section("Table") {
                     HStack {
-                        Text(model.entity.name)
+                        Text(model.table.name)
                         Spacer()
-                        EntityType.shouldShowImage(shouldShow: model.entity.shouldShow)
+                        DatabaseTable.shouldShowImage(shouldShow: model.table.shouldShow)
                     }
                 }
-                Section("Properties") {
-                    ForEach(model.entity.properties) { property in
-                        NavigationLink(value: NavigationPathCase.property(EditPropertyModel(parentModel: model, property: property, isEditing: false))) {
+                Section("Columns") {
+                    ForEach(model.table.columns) { column in
+                        NavigationLink(value: NavigationPathCase.column(EditColumnModel(parentModel: model, column: column, isEditing: false))) {
                             HStack {
-                                Text(property.name)
+                                Text(column.name)
                                 Spacer()
-                                PropertyType.primaryKeyImage(isPrimary: property.isPrimary)
+                                DatabaseColumn.primaryKeyImage(isPrimary: column.isPrimary)
                                     .foregroundColor(.red)
                             }
                         }
                     }
-                    if model.entity.properties.count == 0 {
+                    if model.table.columns.count == 0 {
                         // TODO?: don't show again?
-                        Text("Try adding some properties in the edit view!")
+                        Text("Try adding some columns in the edit view!")
                     }
                 }
             }
-            Button("View Table") {
+            Button("View as Table") {
                 model.viewTablePressed()
             }
         }
     }
 }
 
-struct EditPropertiesView_Previews: PreviewProvider {
+struct EditColumnsView_Previews: PreviewProvider {
     static var previews: some View {
-        EditEntity_Previews.previews
+        TableView_Preview.previews
     }
 }
