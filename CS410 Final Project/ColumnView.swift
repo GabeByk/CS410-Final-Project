@@ -16,7 +16,8 @@ protocol ColumnSaver: AnyObject {
 
 extension EditColumnsModel: ColumnSaver {
     func updateColumn(_ column: DatabaseColumn) {
-        table.columns[id: column.id] = column
+        columns[id: column.id] = column
+        try? SchemaDatabase.shared.updateColumn(&columns[id: column.id]!)
         parentModel?.updateTable(table)
     }
     
@@ -143,7 +144,6 @@ final class EditColumnModel: ViewModel {
 }
 
 struct EditColumn: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditColumnModel
     
     var editingView: some View {
@@ -175,7 +175,6 @@ struct EditColumn: View {
                     }
                     else {
                         // TODO: picker view that you can scroll through
-                        // TODO: seems to have been broken after changing IDs to be Int64s instead of Tagged<Self, UUID>s: there is one for each option, but it shows nil as the name
                         Picker("Table:", selection: $model.selectedTable) {
                             ForEach(model.tables, id:\.self) { rowID in
                                 if let id = Int64(rowID) {

@@ -22,16 +22,13 @@ protocol DatabaseTableSaver: AnyObject {
 
 extension EditDatabaseModel: DatabaseTableSaver {
     func updateTable(table: DatabaseTable) {
-        self.database.tables[id: table.id] = table
+        tables[id: table.id] = table
+        try? SchemaDatabase.shared.updateTable(&tables[id: table.id]!)
         parentModel?.updateDatabase(database: database)
     }
     
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
         return database.tables[id: id]
-    }
-    
-    var tables: IdentifiedArrayOf<DatabaseTable> {
-        database.tables
     }
 }
 
@@ -42,7 +39,6 @@ final class EditDatabaseTableModel: ObservableObject {
     @Published var table: DatabaseTable
     @Published var state: EditTableViewState
     
-    // TODO?: table with no columns defaults to .columns, but table with columns defaults to .table? maybe table with instances defaults to .table, so you have to switch to the table view when you add your first instance?
     init(parentModel: DatabaseTableSaver? = nil, table: DatabaseTable, state: EditTableViewState = .columns, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.table = table
@@ -61,7 +57,6 @@ extension EditDatabaseTableModel: Equatable, Hashable {
 }
 
 struct EditTable: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditDatabaseTableModel
 
     var body: some View {

@@ -50,10 +50,10 @@ final class EditTableModel: ViewModel {
 struct TableView: View {
     let table: DatabaseTable
     
-    // TODO?: does GRDB have an easy way to show a table?
     var body: some View {
         // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-multi-column-lists-using-table
         // https://developer.apple.com/documentation/swiftui/table
+        // TODO: might be better to use a List
         Table(of: DatabaseRow.self) {
             TableColumn("\(table.name)") { table in
                 HStack {
@@ -68,7 +68,6 @@ struct TableView: View {
 }
 
 struct EditTableView: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     #warning("EditTableModel parentModel isn't weak")
     @ObservedObject var model: EditTableModel
     var body: some View {

@@ -15,11 +15,14 @@ struct CS410_Final_ProjectApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(app: app).environment(\.schemaDatabase, .shared)
+            ContentView(app: app)
                 .onChange(of: scenePhase) { phase in
                 switch phase {
                 case .background:
-                    app.storeDatabases()
+                    // print the database, table, and column tables each time we go in the background
+                    print(String(describing: try? SchemaDatabase.shared.allDatabases()))
+                    print(String(describing: try? SchemaDatabase.shared.allTables()))
+                    print(String(describing: try? SchemaDatabase.shared.allColumns()))
                 default:
                     break
                 }

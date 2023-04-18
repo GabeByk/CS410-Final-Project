@@ -11,20 +11,18 @@ import IdentifiedCollections
 import SwiftUI
 import GRDB
 
-// TODO: pressing the add button on any menu no longer allows adding multiple (databases, tables and, columns); this is because it's not linked to the database and another is created with ID -2
-// TODO?: can the constructor automatically add the item to the database so the id is never nil and/or is that a good idea?
-// TODO?: can GRDB deal with Tagged<Self, Int64> as ID's data type and/or is that a good idea?
-
 struct Database: Identifiable {
     public private(set) var id: Int64?
     var name: String
-    // TODO: use GRDB to store and access Database.tables; maybe this should be a computed property
-    var tables: IdentifiedArrayOf<DatabaseTable>
+    var tables: IdentifiedArrayOf<DatabaseTable> {
+        return (try? SchemaDatabase.shared.tablesFor(databaseID: id)) ?? []
+    }
     
-    init(name: String, id: Int64? = nil, tables: IdentifiedArrayOf<DatabaseTable> = []) {
+    init(name: String, id: Int64? = nil) {
         self.name = name
-        self.tables = tables
         self.id = id
+        // TODO: we would ideally want to use an environment variable or something instead of SchemaDatabase.shared so that a user could use their own database
+        try? SchemaDatabase.shared.addDatabase(&self)
     }
     
     mutating func initializeID(to id: Int64) {
@@ -40,7 +38,7 @@ extension Database {
     }
     
     static var mockDatabase: Database {
-        return Database(name: "Database A", id: -1, tables: [.mockDatabaseTable])
+        return Database(name: "Database A", id: -1)
     }
 }
 
@@ -65,22 +63,24 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     }
     
     var name: String
-    // TODO: don't encode and decode instances in AppModel.schemaFilename, since that info will go in the database using GRDB.
-    // TODO: use GRDB to access rows
-    var rows: IdentifiedArrayOf<DatabaseRow>
-    // TODO?: is this functionality necessary? having to show helper tables to work on them and add data will be kind of annoying
-    var shouldShow: Bool
     
-    // TODO: use GRDB to access columns
-    var columns: IdentifiedArrayOf<DatabaseColumn>
+    // TODO: get rows from the appropriate database based on databaseID
+    var rows: IdentifiedArrayOf<DatabaseRow> {
+        return []
+    }
+    
+    var columns: IdentifiedArrayOf<DatabaseColumn> {
+        return (try? SchemaDatabase.shared.columnsFor(tableID: id)) ?? []
+    }
+    
+    var shouldShow: Bool
     
     init(name: String, shouldShow: Bool = true, id: Int64? = nil, columns: IdentifiedArrayOf<DatabaseColumn> = [], rows: IdentifiedArrayOf<DatabaseRow> = [], databaseID: Int64) {
         self.name = name
         self.shouldShow = shouldShow
-        self.rows = rows
-        self.columns = columns
         self.id = id
         self.databaseID = databaseID
+        try? SchemaDatabase.shared.addTable(&self)
     }
     
     mutating func initializeID(to id: Int64) {
@@ -90,7 +90,8 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     }
     
     mutating func removeColumn(_ column: DatabaseColumn) {
-        columns.remove(column)
+        var myColumn = column
+        try? SchemaDatabase.shared.removeColumn(&myColumn)
         for var instance in rows {
             if let id = column.id {
                 instance.removeValueFor(columnID: id)
@@ -106,7 +107,8 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     }
     
     mutating func addColumn(_ column: DatabaseColumn) {
-        columns[id: column.id] = column
+        var myColumn = column
+        try? SchemaDatabase.shared.addColumn(&myColumn)
         for var instance in rows {
             if let id = column.id {
                 instance.updateValueFor(columnID: id, newValue: nil)
@@ -115,8 +117,9 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     }
     
     mutating func addInstance() {
-        #warning("defaulting tableID to -2 in DatabaseTable.addInstance")
-        rows.append(.empty(tableID: id ?? -2))
+        // TODO: add a row to the table
+//        #warning("defaulting tableID to -2 in DatabaseTable.addInstance")
+//        rows.append(.empty(tableID: id ?? -2))
     }
     
     // could probably be a computed property but it's theta(n) for n columns, so it's a function
@@ -171,9 +174,11 @@ enum ValueType: String, Equatable, Hashable, Codable, DatabaseValueConvertible {
 
 struct DatabaseColumn: Identifiable, Equatable, Hashable {
     public private(set) var id: Int64?
-    /// whether this column is part of the primary key for its table. a column should be marked as primary if the value of all primary columns for a table are enough to uniquely determine which row has those values.
+    // whether this column is part of the primary key for its table. a column should be marked as primary if the value of all primary columns for a table are enough to uniquely determine which row has those values.
     var isPrimary: Bool
+    // the title of this column
     var name: String
+    // which data type this column should hold
     var type: ValueType
     // if type is .table, which DatabaseTable this DatabaseColumn holds
     var associatedTableID: Int64?
@@ -186,6 +191,7 @@ struct DatabaseColumn: Identifiable, Equatable, Hashable {
         self.isPrimary = isPrimary
         self.id = id
         self.tableID = tableID
+        try? SchemaDatabase.shared.addColumn(&self)
     }
     
     mutating func initializeID(to id: Int64) {
@@ -213,8 +219,9 @@ extension DatabaseColumn {
     }
 }
 
-// MARK: - Value
+// MARK: - StoredValue
 
+// TODO: this may be unnecessary beacuse I can add a column with data type determined by a switch statement
 protocol StoredValue: Equatable, Hashable, Codable, CustomStringConvertible {
     ///
     /// - returns: nil if the value passed is nil, otherwise the result of running the constructor on the unwrapped value; implemented automatically using the required failable init
@@ -268,22 +275,22 @@ func valueFrom(databaseValue: String?, type: ValueType) -> (any StoredValue)? {
 
 // MARK: - DatabaseRow
 
+// TODO: adding and removing a row can be done in the database, so this may not be necessary
 struct DatabaseRow: Identifiable, Equatable, Hashable {
     public private(set) var id: Int64?
     // which DatabaseTable this is an instance of
     var tableID: Int64
     // https://developer.apple.com/documentation/swift/dictionary
-    // TODO: use GRDB to access Columns by DatabaseColumn ID (if possible?)
-    var columns: Dictionary<Int64, DatabaseValue>
+    // TODO: computed property that looks up data in the database
+    var columns: Dictionary<Int64, DatabaseEntry>
     
     init(columns: IdentifiedArrayOf<DatabaseColumn>? = nil, id: Int64? = nil, tableID: Int64) {
         self.id = id
         self.columns = [:]
         if let columns {
             for column in columns {
-                
                 #warning("defaulting rowID and columnID to -2 in DatabaseRow.init")
-                let column = DatabaseValue(rowID: id ?? -2, columnID: column.id ?? -2, value: nil)
+                let column = DatabaseEntry(rowID: id ?? -2, columnID: column.id ?? -2, value: nil)
                 self.columns[column.id ?? -2] = column
             }
         }
@@ -309,7 +316,7 @@ struct DatabaseRow: Identifiable, Equatable, Hashable {
             columns[columnID]!.value = .from(value: newValue)
         }
         else {
-            columns[columnID] = DatabaseValue(rowID: id ?? -2, columnID: columnID, value: newValue)
+            columns[columnID] = DatabaseEntry(rowID: id ?? -2, columnID: columnID, value: newValue)
         }
     }
     
@@ -332,12 +339,14 @@ extension DatabaseRow: CustomStringConvertible {
     }
 }
 
-// MARK: - DatabaseValue
-struct DatabaseValue: Identifiable {
+// MARK: - DatabaseEntry
+
+// TODO: deal with data directly with the database so this is unnecessary
+struct DatabaseEntry: Identifiable {
     public private(set) var id: Int64?
-    // which row this value is for
     var rowID: Int64
     var columnID: Int64
+    // TODO: can I make this like a Byte type that is just stored in the database as bits?
     var value: String?
     
     init(rowID: Int64, columnID: Int64, value: (any StoredValue)?) {
@@ -354,8 +363,8 @@ struct DatabaseValue: Identifiable {
     }
 }
 
-extension DatabaseValue: Equatable, Hashable {
-    static func == (lhs: DatabaseValue, rhs: DatabaseValue) -> Bool {
+extension DatabaseEntry: Equatable, Hashable {
+    static func == (lhs: DatabaseEntry, rhs: DatabaseEntry) -> Bool {
         return lhs.rowID == rhs.rowID && lhs.columnID == rhs.columnID
     }
     
@@ -367,6 +376,7 @@ extension DatabaseValue: Equatable, Hashable {
 
 // MARK: - GRDB setup
 
+// TODO: refactor to remove DatabaseRow and DatabaseEntry
 extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
     static let tables = hasMany(DatabaseTable.self, using: DatabaseTable.databaseForeignKey)
     enum Columns {
@@ -379,10 +389,16 @@ extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRec
 }
 
 extension DatabaseTable: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case shouldShow
+        case databaseID
+    }
+    
     static let databaseForeignKey = ForeignKey(["databaseID"])
     static let database = belongsTo(Database.self, using: databaseForeignKey)
     
-    static let rows = hasMany(DatabaseRow.self, using: DatabaseRow.tableForeignKey)
     static let columns = hasMany(DatabaseColumn.self, using: DatabaseColumn.tableForeignKey)
     
     enum Columns {
@@ -417,15 +433,14 @@ extension DatabaseRow: Codable, TableRecord, FetchableRecord, MutablePersistable
     static let tableForeignKey = ForeignKey(["tableID"])
     static let table = belongsTo(DatabaseTable.self, using: tableForeignKey)
     
-    // TODO: does this need to have a different using to look up by DatabaseColumn ID?
-    static let columns = hasMany(DatabaseValue.self, using: DatabaseValue.rowForeignKey)
+    static let columns = hasMany(DatabaseEntry.self, using: DatabaseEntry.rowForeignKey)
     
     mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID
     }
 }
 
-extension DatabaseValue: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
+extension DatabaseEntry: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
     static let rowForeignKey = ForeignKey(["rowID"])
     static let row = belongsTo(DatabaseRow.self, using: rowForeignKey)
     
