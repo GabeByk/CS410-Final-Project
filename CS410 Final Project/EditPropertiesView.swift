@@ -35,17 +35,16 @@ extension EditDatabaseTableModel: ColumnsSaver {
 }
 
 final class EditColumnsModel: ViewModel {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     #warning("EditColumnsModel parentModel isn't weak")
     var parentModel: ColumnsSaver?
     @Published var table: DatabaseTable
-    @Published var draftTable: DatabaseTable
+    @Published var columns: IdentifiedArrayOf<DatabaseColumn>
     
     // TODO?: table with no columns defaults to .columns, but table with columns defaults to .table? maybe table with rows defaults to .table, so you have to switch to the table view when you add your first row?
     init(parentModel: ColumnsSaver? = nil, table: DatabaseTable, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.table = table
-        self.draftTable = table
+        self.columns = table.columns
         super.init(isEditing: isEditing)
     }
     
@@ -57,26 +56,46 @@ final class EditColumnsModel: ViewModel {
         // TODO?: what causes runtime warning "Publishing changes from within view updates is not allowed, this will cause undefined behavior."?
         // something I changed seems to have fixed it?
         if isEditing {
-            table = draftTable
-            parentModel?.updateTable(draftTable)
+            for column in table.columns {
+                // if we have a column that the draft doesn't, remove it
+                if columns[id: column.id] == nil {
+                    try? SchemaDatabase.shared.removeColumn(&columns[id: column.id]!)
+                    columns.remove(column)
+                }
+                else {
+                    try? SchemaDatabase.shared.updateColumn(&columns[id: column.id]!)
+                    columns[id: column.id] = table.columns[id: column.id]!
+                }
+            }
+            parentModel?.updateTable(table)
+            // TODO: commit transaction
         }
         else {
-            draftTable = table
+            // TODO: start transaction
+            columns = table.columns
         }
         isEditing.toggle()
     }
     
     override func cancelButtonPressed() {
         isEditing = false
+        // TODO: cancel transaction
     }
     
     func addColumn() {
         #warning("defaulting tableID to -2 in EditColumnsModel.addColumn")
-        draftTable.addColumn(.empty(tableID: draftTable.id ?? -2))
+        var column: DatabaseColumn = .empty(tableID: table.id ?? -2)
+        try? SchemaDatabase.shared.addColumn(&column)
+        columns.append(column)
+        table.addColumn(column)
     }
     
     func removeColumns(at offsets: IndexSet) {
-        draftTable.removeColumns(at: offsets)
+        for offset in offsets {
+            var column = columns[offset]
+            try? SchemaDatabase.shared.removeColumn(&column)
+        }
+        columns.remove(atOffsets: offsets)
     }
     
 }
@@ -96,17 +115,17 @@ struct EditColumnsView: View {
         Form {
             Section("Table") {
                 HStack {
-                    TextField("Table Name", text: $model.draftTable.name)
+                    TextField("Table Name", text: $model.table.name)
                     Spacer()
                     Button {
-                        model.draftTable.shouldShow.toggle()
+                        model.table.shouldShow.toggle()
                     } label: {
-                        DatabaseTable.shouldShowImage(shouldShow: model.draftTable.shouldShow)
+                        DatabaseTable.shouldShowImage(shouldShow: model.table.shouldShow)
                     }
                 }
             }
             Section("Columns") {
-                ForEach($model.draftTable.columns) { $column in
+                ForEach($model.columns) { $column in
                     HStack {
                         TextField("Column Name", text: $column.name)
                         Spacer()

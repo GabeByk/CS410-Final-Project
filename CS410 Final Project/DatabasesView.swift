@@ -87,13 +87,38 @@ struct ModelDrivenView: View {
 
 @MainActor
 protocol DatabasesSaver: AnyObject {
-    func updateDatabases(databases: IdentifiedArrayOf<Database>)
+    func updateDatabases(databases: IdentifiedArrayOf<Database>, updateSchemaDatabase: Bool)
     var databases: IdentifiedArrayOf<Database> { get }
 }
 
 extension AppModel: DatabasesSaver {
-    func updateDatabases(databases: IdentifiedArrayOf<Database>) {
-        self.databases = databases
+    func updateDatabases(databases: IdentifiedArrayOf<Database>, updateSchemaDatabase: Bool = true) {
+        var draftDatabases = databases
+        if updateSchemaDatabase {
+            // for each database we have,
+            for database in self.databases {
+                // if it's still in here, update it
+                if var updated = databases[id: database.id] {
+                    try? SchemaDatabase.shared.updateDatabase(&updated)
+                    self.databases[id: updated.id] = updated
+                }
+                // otherwise, remove it
+                else {
+                    try? SchemaDatabase.shared.removeDatabase(&self.databases[id: database.id]!)
+                    self.databases.remove(database)
+                }
+                // remove this database from the draft so we can know anything that remains was added
+                draftDatabases.remove(database)
+            }
+            // update everything that was added; it was added as an empty version, so we need to change it
+            for var database in draftDatabases {
+                try? SchemaDatabase.shared.updateDatabase(&database)
+            }
+            self.databases += draftDatabases
+        }
+        else {
+            self.databases = databases
+        }
     }
 }
 
@@ -113,8 +138,11 @@ final class EditDatabasesModel: ViewModel {
     }
         
     override func editButtonPressed() {
+        // TODO: figure out how transactions work https://swiftpackageindex.com/groue/grdb.swift/v6.11.0/documentation/grdb/transactions
+        // TODO: start a transaction when edit is pressed, commit it when done is pressed
         if isEditing {
-            parentModel?.updateDatabases(databases: draftDatabases)
+            // we may have changed multiple databases, so we're responsible for updating the SchemaDatabase
+            parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: true)
         }
         else {
             draftDatabases = databases
@@ -123,6 +151,7 @@ final class EditDatabasesModel: ViewModel {
     }
     
     override func cancelButtonPressed() {
+        // TODO: cancel/revert the transaction when cancel is pressed
         isEditing = false
     }
     
@@ -136,7 +165,6 @@ final class EditDatabasesModel: ViewModel {
 }
 
 struct EditDatabases: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditDatabasesModel
     
     var body: some View {

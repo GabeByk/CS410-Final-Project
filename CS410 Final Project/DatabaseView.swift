@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import IdentifiedCollections
 
 
 @MainActor
@@ -16,7 +17,9 @@ protocol DatabaseSaver: AnyObject {
 extension EditDatabasesModel: DatabaseSaver {
     func updateDatabase(database: Database) {
         self.draftDatabases[id: database.id] = database
-        parentModel?.updateDatabases(databases: draftDatabases)
+        try? SchemaDatabase.shared.updateDatabase(&draftDatabases[id: database.id]!)
+        // we updated the database, so the parentModel doesn't need to
+        parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: false)
     }
 }
 
@@ -26,45 +29,58 @@ final class EditDatabaseModel: ViewModel {
     #warning("EditDatabaseModel parentModel isn't weak")
     var parentModel: DatabaseSaver?
     @Published var database: Database
-    @Published var draftDatabase: Database
+    // we need to store a local copy of all the tables so the user can rename a table from this view
+    @Published var tables: IdentifiedArrayOf<DatabaseTable>
         
     init(parentModel: DatabaseSaver? = nil, database: Database, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.database = database
-        self.draftDatabase = database
+        self.tables = database.tables
         super.init(isEditing: isEditing)
     }
     
     override func editButtonPressed() {
         if isEditing {
-            database = draftDatabase
-            parentModel?.updateDatabase(database: draftDatabase)
+            // the DatabaseTable constructor automatically adds any new tables and removeTables removes them, so we just need to make sure all the tables in tables are up to date in the database
+            for var table in tables {
+                try? SchemaDatabase.shared.updateTable(&table)
+            }
+            parentModel?.updateDatabase(database: database)
             if parentModel == nil {
                 print("No parentModel to save changes")
             }
+            // TODO: commit transaction
         }
         else {
-            draftDatabase = database
+            // TODO: start transaction
+            self.tables = database.tables
         }
         isEditing.toggle()
     }
     
     override func cancelButtonPressed() {
         isEditing = false
+        // TODO: cancel transaction
     }
     
     func addTable() {
         #warning("defaulting draftDatabaseID to -2 in EditDatabaseModel.addTable")
-        draftDatabase.tables.append(.empty(databaseID: draftDatabase.id ?? -2))
+        var table = DatabaseTable.empty(databaseID: database.id ?? -2)
+        // curently the constructor automatically adds it, but if we do it we would do it here
+        try? SchemaDatabase.shared.addTable(&table)
+        tables.append(table)
     }
     
     func removeTables(at offsets: IndexSet) {
-        draftDatabase.tables.remove(atOffsets: offsets)
+        for offset in offsets {
+            var table = tables[offset]
+            try? SchemaDatabase.shared.removeTable(&table)
+        }
+        tables.remove(atOffsets: offsets)
     }
 }
 
 struct EditDatabase: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditDatabaseModel
     
     var body: some View {
@@ -78,10 +94,10 @@ struct EditDatabase: View {
     var editingView: some View {
         Form {
             Section("Database") {
-                TextField("Database Name", text: $model.draftDatabase.name)
+                TextField("Database Name", text: $model.database.name)
             }
             Section("Tables") {
-                ForEach($model.draftDatabase.tables) { $table in
+                ForEach($model.tables) { $table in
                     HStack {
                         TextField("Table Name", text: $table.name)
                         Spacer()

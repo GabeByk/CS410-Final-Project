@@ -7,6 +7,7 @@
 
 import Foundation
 import GRDB
+import IdentifiedCollections
 
 /// The database used to store the schemas of all the databases
 struct SchemaDatabase {
@@ -16,6 +17,138 @@ struct SchemaDatabase {
         try migrator.migrate(dbWriter)
     }
     
+    func allDatabases() throws -> IdentifiedArrayOf<Database> {
+        // fetch the databases
+        let databases: [Database] = try dbWriter.read { db in
+            try Database.fetchAll(db)
+        }
+        
+        // convert to identified array
+        var identifiedDatabases: IdentifiedArrayOf<Database> = []
+        for database in databases {
+            identifiedDatabases.append(database)
+        }
+        return identifiedDatabases
+    }
+    
+    func addDatabase(_ database: inout Database) throws {
+        try dbWriter.write() { db in
+            try database.insert(db)
+        }
+    }
+    
+    func removeDatabase(_ database: inout Database) throws {
+        // TODO: why am I getting a warning "Result of call to 'write' is unused" but not in addDatabase or updateDatabase
+        // if i just add 'print(db)' inside the body it seems happy; maybe delete isn't marked as using the database or something?
+        try dbWriter.write() { db in
+            try database.delete(db)
+        }
+    }
+    
+    func updateDatabase(_ database: inout Database) throws {
+        try dbWriter.write() { db in
+            try database.update(db)
+        }
+    }
+    
+    func allTables() throws -> IdentifiedArrayOf<DatabaseTable> {
+        // fetch the tables
+        let tables: [DatabaseTable] = try dbWriter.read { db in
+            try DatabaseTable.fetchAll(db)
+        }
+        
+        // convert to an identified array
+        var identifiedTables: IdentifiedArrayOf<DatabaseTable> = []
+        for table in tables {
+            identifiedTables.append(table)
+        }
+        return identifiedTables
+    }
+    
+    func tablesFor(databaseID: Database.ID) throws -> IdentifiedArrayOf<DatabaseTable> {
+        // fetch the tables
+        let tables: [DatabaseTable] = try dbWriter.read { db in
+            try DatabaseTable.fetchAll(db)
+                .filter { table in
+                    table.databaseID == databaseID
+                }
+        }
+        
+        // convert to identified array
+        var identifiedTables: IdentifiedArrayOf<DatabaseTable> = []
+        for table in tables {
+            identifiedTables.append(table)
+        }
+        return identifiedTables
+    }
+    
+    func addTable(_ table: inout DatabaseTable) throws {
+        try dbWriter.write() { db in
+            try table.insert(db)
+        }
+    }
+    
+    func removeTable(_ table: inout DatabaseTable) throws {
+        try dbWriter.write() { db in
+            try table.delete(db)
+        }
+    }
+    
+    func updateTable(_ table: inout DatabaseTable) throws {
+        try dbWriter.write() { db in
+            try table.update(db)
+        }
+    }
+    
+    func allColumns() throws -> IdentifiedArrayOf<DatabaseColumn> {
+        // fetch the columns
+        let columns: [DatabaseColumn] = try dbWriter.read { db in
+            try DatabaseColumn.fetchAll(db)
+        }
+        
+        // convert to identified array
+        var identifiedColumns: IdentifiedArrayOf<DatabaseColumn> = []
+        for column in columns {
+            identifiedColumns.append(column)
+        }
+        return identifiedColumns
+    }
+    
+    func columnsFor(tableID: DatabaseTable.ID) throws -> IdentifiedArrayOf<DatabaseColumn> {
+        // fetch the columns
+        let columns: [DatabaseColumn] = try dbWriter.read { db in
+            try DatabaseColumn.fetchAll(db)
+                .filter { column in
+                    column.tableID == tableID
+                }
+        }
+        
+        // convert to identified array
+        var identifiedColumns: IdentifiedArrayOf<DatabaseColumn> = []
+        for column in columns {
+            identifiedColumns.append(column)
+        }
+        return identifiedColumns
+    }
+    
+    func addColumn(_ column: inout DatabaseColumn) throws {
+        try dbWriter.write() { db in
+            try column.insert(db)
+        }
+    }
+    
+    func removeColumn(_ column: inout DatabaseColumn) throws {
+        try dbWriter.write() { db in
+            try column.delete(db)
+        }
+    }
+    
+    func updateColumn(_ column: inout DatabaseColumn) throws {
+        try dbWriter.write() { db in
+            try column.update(db)
+        }
+    }
+
     /// The DatabaseMigrator that defines the database schema.
        ///
        /// See <https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/migrations>
@@ -36,7 +169,7 @@ struct SchemaDatabase {
                    t.column("name", .text).notNull()
                }
                
-               try db.create(table: "table") { t in
+               try db.create(table: "databaseTable") { t in
                    t.autoIncrementedPrimaryKey("id")
                    t.column("databaseID", .integer)
                        .notNull()
@@ -46,41 +179,19 @@ struct SchemaDatabase {
                    t.column("shouldShow", .boolean)
                }
                
-               try db.create(table: "column") { t in
+               try db.create(table: "databaseColumn") { t in
                    t.autoIncrementedPrimaryKey("id")
                    t.column("tableID", .integer)
                        .notNull()
                        .indexed()
-                       .references("table", onDelete: .cascade)
+                       .references("databaseTable", onDelete: .cascade)
                    t.column("associatedTableID", .integer)
                        .indexed()
-                       .references("table", onDelete: .setNull)
+                       .references("databaseTable", onDelete: .setNull)
                    t.column("name", .text)
                    t.column("isPrimary", .boolean)
                    // TODO: this column is a raw value of the ValueType enum; do I need to put that here somehow, or can I just use .text?
                    t.column("type", .text)
-               }
-               
-               try db.create(table: "row") { t in
-                   t.autoIncrementedPrimaryKey("id")
-                   t.column("tableID", .integer)
-                       .notNull()
-                       .indexed()
-                       .references("table", onDelete: .cascade)
-               }
-               
-               try db.create(table: "value") { t in
-                   t.autoIncrementedPrimaryKey("id")
-                   t.column("rowID", .integer)
-                       .notNull()
-                       .indexed()
-                       .references("row", onDelete: .cascade)
-                   t.column("columnID", .integer)
-                       .notNull()
-                       .indexed()
-                       .references("column", onDelete: .cascade)
-                   // TODO: this column is the value of an optional string that our associated column tells us how to interpret
-                    t.column("value", .text)
                }
            }
            
@@ -114,7 +225,7 @@ extension SchemaDatabase {
             let fileManager = FileManager()
             let folderURL = try fileManager
                 .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                .appendingPathComponent("database", isDirectory: true)
+                .appendingPathComponent("schemas", isDirectory: true)
 
             // Support for tests: delete the database if requested
             if CommandLine.arguments.contains("-reset") {
@@ -126,10 +237,10 @@ extension SchemaDatabase {
 
             // Connect to a database on disk
             // See https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseconnections
-            let dbURL = folderURL.appendingPathComponent("db.sqlite")
+            let dbURL = folderURL.appendingPathComponent("schema.sqlite")
             let dbPool = try DatabasePool(path: dbURL.path)
 
-            // Create the AppDatabase
+            // Create the SchemaDatabase
             let appDatabase = try SchemaDatabase(dbPool)
 
             // Prepare the database with test fixtures if requested
@@ -142,7 +253,7 @@ extension SchemaDatabase {
 //            }
             return appDatabase
         } catch {
-            // Replace this implementation with code to handle the error appropriately.
+            // TODO: Replace this implementation with code to handle the error appropriately.
             // fatalError() causes the application to generate a crash log and terminate.
             //
             // Typical reasons for an error here include:
@@ -161,5 +272,166 @@ extension SchemaDatabase {
         // See https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseconnections
         let dbQueue = try! DatabaseQueue()
         return try! SchemaDatabase(dbQueue)
+    }
+}
+
+/// One of these objects manages the information for an entry in the SchemaDatabase's database table
+struct DataDatabase {
+    let databaseID: Int64
+    
+    // the number of transactions so each migration has a unique name
+    var transactionCount: Int = 0
+    
+    init(databaseID: Int64, _ dbWriter: any DatabaseWriter) {
+        self.databaseID = databaseID
+        self.dbWriter = dbWriter
+    }
+    
+    /// Add the requested table to the database
+    mutating func addTable(_ table: DatabaseTable) {
+        defer {
+            transactionCount += 1
+        }
+        // run SQL to add the table
+        if table.id != nil {
+            var migrator = DatabaseMigrator()
+            
+            migrator.registerMigration("createTable\(table.id!)\(transactionCount)") { db in
+                try db.create(table: "\(table.id!)") { t in
+                    t.autoIncrementedPrimaryKey("id")
+                }
+            }
+        }
+        else {
+            print("Tried to create uninitialized table \(table.name)!")
+        }
+    }
+    
+    /// Remove the requested table from the database
+    mutating func removeTable(_ table: DatabaseTable) {
+        defer {
+            transactionCount += 1
+        }
+        // run SQL to remove the table
+        if table.id != nil {
+            var migrator = DatabaseMigrator()
+            
+            migrator.registerMigration("removeTable\(table.id!)\(transactionCount)") { db in
+                try db.drop(table: "\(table.id!)")
+            }
+        }
+        else {
+            print("Tried to delete uninitialized table \(table.name)!")
+        }
+    }
+    
+    /// Add the given column to the table with the ID that matches the column's tableID property
+    mutating func addColumn(_ column: DatabaseColumn) {
+        defer {
+            transactionCount += 1
+        }
+        // run SQL to add the column
+        if column.id != nil {
+            var migrator = DatabaseMigrator()
+            
+            migrator.registerMigration("addColumn\(column.id!)ToTable\(column.tableID)\(transactionCount)") { db in
+                try db.alter(table: "\(column.tableID)") { t in
+                    var columnAdded = false
+                    let dataType: GRDB.Database.ColumnType
+                    switch column.type {
+                    case .table:
+                        dataType = .integer
+                        if let otherTableID = column.associatedTableID {
+                            t.add(column: "\(column.id!)", dataType)
+                                .indexed()
+                                .references("\(otherTableID)")
+                        }
+                        else {
+                            print("Tried to add column \(column.name) referencing a table, but the other table's ID was nil")
+                        }
+                        columnAdded = true
+                    case .int:
+                        dataType = .integer
+                    case .string:
+                        dataType = .text
+                    case .bool:
+                        dataType = .boolean
+                    case .double:
+                        dataType = .double
+                    }
+                    if !columnAdded {
+                        t.add(column: "\(column.id!)", dataType)
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Remove the given column from the table with the ID that matches the column's tableID property
+    mutating func removeColumn(_ column: DatabaseColumn) {
+        defer {
+            transactionCount += 1
+        }
+        // run SQL to remove the column
+        if column.id != nil {
+            var migrator = DatabaseMigrator()
+            
+            migrator.registerMigration("removeColumn\(column.id!)FromTable\(column.tableID)") { db in
+                try db.alter(table: "\(column.tableID)") { t in
+                    t.drop(column: "\(column.id!)")
+                }
+            }
+        }
+    }
+    
+    /// Update the given column in the table with the ID that matches the column's tableID property
+    /// Updates the column by removing the existing column and adding it again; only call this method if changing the data type
+    mutating func updateColumn(_ column: DatabaseColumn) {
+        // run SQL to update the column
+        removeColumn(column)
+        addColumn(column)
+    }
+    
+    /// Scans the SchemaDatabase and ensures all tables and columns are up to date. TODO: implement this method
+    mutating func sync() {
+        
+    }
+    
+    private let dbWriter: any DatabaseWriter
+}
+
+extension DataDatabase {
+    /// Creates an instance connected to the Database object with the given ID.
+    static func discDatabaseFor(id: Int64) -> DataDatabase {
+        do {
+            // Choose folder
+            let fileManager = FileManager()
+            let folderURL = try fileManager
+                .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                // this DB's files should be inside the databases/id directory
+                .appendingPathComponent("databases", isDirectory: true)
+                .appendingPathComponent("\(id)", isDirectory: true)
+            
+            // Create the folder if it doesn't exist
+            try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            
+            // Connect to the disc database
+            // See https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseconnections
+            let dbURL = folderURL.appendingPathComponent("\(id).sqlite")
+            let dbPool = try DatabasePool(path: dbURL.path)
+            
+            // Create the requested DataDatabase object
+            let database = DataDatabase(databaseID: id, dbPool)
+            return database
+        }
+        catch {
+            // TODO: Replace this implementation with code to handle the error appropriately.
+            fatalError("Unresolved error \(error)")
+        }
+    }
+    
+    /// removes all data for the specified database from the disc
+    static func deleteDataFor(id: Int64) {
+        // TODO: delete a file/directory (/databases/id)
     }
 }

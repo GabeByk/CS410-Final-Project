@@ -22,16 +22,13 @@ protocol DatabaseTableSaver: AnyObject {
 
 extension EditDatabaseModel: DatabaseTableSaver {
     func updateTable(table: DatabaseTable) {
-        self.database.tables[id: table.id] = table
+        tables[id: table.id] = table
+        try? SchemaDatabase.shared.updateTable(&tables[id: table.id]!)
         parentModel?.updateDatabase(database: database)
     }
     
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
         return database.tables[id: id]
-    }
-    
-    var tables: IdentifiedArrayOf<DatabaseTable> {
-        database.tables
     }
 }
 
@@ -61,7 +58,6 @@ extension EditDatabaseTableModel: Equatable, Hashable {
 }
 
 struct EditTable: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditDatabaseTableModel
 
     var body: some View {

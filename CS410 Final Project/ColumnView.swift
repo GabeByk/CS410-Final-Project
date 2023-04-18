@@ -16,7 +16,8 @@ protocol ColumnSaver: AnyObject {
 
 extension EditColumnsModel: ColumnSaver {
     func updateColumn(_ column: DatabaseColumn) {
-        table.columns[id: column.id] = column
+        columns[id: column.id] = column
+        try? SchemaDatabase.shared.updateColumn(&columns[id: column.id]!)
         parentModel?.updateTable(table)
     }
     
@@ -143,7 +144,6 @@ final class EditColumnModel: ViewModel {
 }
 
 struct EditColumn: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     @ObservedObject var model: EditColumnModel
     
     var editingView: some View {

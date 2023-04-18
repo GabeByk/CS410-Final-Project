@@ -54,6 +54,7 @@ struct TableView: View {
     var body: some View {
         // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-multi-column-lists-using-table
         // https://developer.apple.com/documentation/swiftui/table
+        // TODO: might be better to use a list
         Table(of: DatabaseRow.self) {
             TableColumn("\(table.name)") { table in
                 HStack {
@@ -68,7 +69,6 @@ struct TableView: View {
 }
 
 struct EditTableView: View {
-    @Environment(\.schemaDatabase) private var schemaDatabase
     #warning("EditTableModel parentModel isn't weak")
     @ObservedObject var model: EditTableModel
     var body: some View {
