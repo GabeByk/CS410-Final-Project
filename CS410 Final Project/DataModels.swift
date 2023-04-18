@@ -14,6 +14,7 @@ import GRDB
 struct Database: Identifiable {
     public private(set) var id: Int64?
     var name: String
+    // TODO: use GRDB to store and access Database.tables
     var tables: IdentifiedArrayOf<DatabaseTable> {
         return (try? SchemaDatabase.shared.tablesFor(databaseID: id)) ?? []
     }
@@ -69,10 +70,12 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
         return []
     }
     
+    // TODO: use GRDB to access columns
     var columns: IdentifiedArrayOf<DatabaseColumn> {
         return (try? SchemaDatabase.shared.columnsFor(tableID: id)) ?? []
     }
     
+    // TODO?: is this functionality necessary? having to show helper tables to work on them and add data will be kind of annoying
     var shouldShow: Bool
     
     init(name: String, shouldShow: Bool = true, id: Int64? = nil, columns: IdentifiedArrayOf<DatabaseColumn> = [], rows: IdentifiedArrayOf<DatabaseRow> = [], databaseID: Int64) {
@@ -433,6 +436,7 @@ extension DatabaseRow: Codable, TableRecord, FetchableRecord, MutablePersistable
     static let tableForeignKey = ForeignKey(["tableID"])
     static let table = belongsTo(DatabaseTable.self, using: tableForeignKey)
     
+    // TODO: does this need to have a different using to look up by DatabaseColumn ID?
     static let columns = hasMany(DatabaseEntry.self, using: DatabaseEntry.rowForeignKey)
     
     mutating func didInsert(_ inserted: InsertionSuccess) {
