@@ -1,5 +1,5 @@
 //
-//  EditColumnsView.swift
+//  ColumnsView.swift
 //  CS410 Final Project
 //
 //  Created by Gabe Byk on 3/30/23.
@@ -12,7 +12,6 @@ protocol ColumnsSaver: AnyObject {
     func updateTable(_ table: DatabaseTable)
     func exitColumnsView()
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
-    var tables: IdentifiedArrayOf<DatabaseTable> { get }
 }
 
 extension EditDatabaseTableModel: ColumnsSaver {
@@ -27,10 +26,6 @@ extension EditDatabaseTableModel: ColumnsSaver {
     
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
         parentModel?.tableFor(id: id)
-    }
-    
-    var tables: IdentifiedArrayOf<DatabaseTable> {
-        parentModel?.tables ?? []
     }
 }
 
@@ -53,45 +48,42 @@ final class EditColumnsModel: ViewModel {
     
     override func editButtonPressed() {
         if isEditing {
+            // table.columns is the columns for this table in the database
             for column in table.columns {
-                // if we have a column that the draft doesn't, remove it
-                if columns[id: column.id] == nil {
-                    try? SchemaDatabase.shared.removeColumn(&columns[id: column.id]!)
-                    columns.remove(column)
+                // if we both have a column with this id, update the database with the data for our version
+                if let updatedColumn = columns[id: column.id] {
+                    try? SchemaDatabase.shared.updateColumn(updatedColumn)
+                    // remove the column from our version so we know anything left in it was added by the user
+                    columns.remove(updatedColumn)
                 }
+                // if the database has it but we don't, it should be removed
                 else {
-                    try? SchemaDatabase.shared.updateColumn(&columns[id: column.id]!)
-                    columns[id: column.id] = table.columns[id: column.id]!
+                    try? SchemaDatabase.shared.removeColumn(column)
                 }
             }
+            // any columns now left in columns were added to the database, but not in the list yet
+            for column in columns {
+                try? SchemaDatabase.shared.addColumn(column)
+            }
             parentModel?.updateTable(table)
-            // TODO: commit transaction
         }
-        else {
-            // TODO: start transaction
-            columns = table.columns
-        }
+        // we need to sync our local variable with the database in either case
+        columns = table.columns
         isEditing.toggle()
     }
     
     override func cancelButtonPressed() {
         isEditing = false
-        // TODO: cancel transaction
     }
     
     func addColumn() {
-        #warning("defaulting tableID to -2 in EditColumnsModel.addColumn")
-        var column: DatabaseColumn = .empty(tableID: table.id ?? -2)
-        try? SchemaDatabase.shared.addColumn(&column)
+        let column: DatabaseColumn = .empty(tableID: table.id)
         columns.append(column)
-        table.addColumn(column)
+        // all addColumn does is propogate the added column to each row, but we would want to do this in the editButtonPressed method so it's cancellable
+//        table.addColumn(column)
     }
     
     func removeColumns(at offsets: IndexSet) {
-        for offset in offsets {
-            var column = columns[offset]
-            try? SchemaDatabase.shared.removeColumn(&column)
-        }
         columns.remove(atOffsets: offsets)
     }
     
@@ -130,6 +122,7 @@ struct EditColumnsView: View {
                             column.isPrimary.toggle()
                         } label: {
                             // TODO?: have a pop-up tutorial type thing about what a primary key is, etc
+                            // TODO: column.primaryKeyImage?
                             DatabaseColumn.primaryKeyImage(isPrimary: column.isPrimary)
                         }
                         .buttonStyle(.borderless)
@@ -181,7 +174,7 @@ struct EditColumnsView: View {
     }
 }
 
-struct EditColumnsView_Previews: PreviewProvider {
+struct ColumnsView_Previews: PreviewProvider {
     static var previews: some View {
         TableView_Preview.previews
     }

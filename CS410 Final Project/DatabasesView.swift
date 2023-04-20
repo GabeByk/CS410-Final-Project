@@ -97,22 +97,22 @@ extension AppModel: DatabasesSaver {
         if updateSchemaDatabase {
             // for each database we have,
             for database in self.databases {
-                // if it's still in here, update it
-                if var updated = databases[id: database.id] {
-                    try? SchemaDatabase.shared.updateDatabase(&updated)
+                // if the new version also has it, update it
+                if let updated = databases[id: database.id] {
+                    try? SchemaDatabase.shared.updateDatabase(updated)
                     self.databases[id: updated.id] = updated
                 }
                 // otherwise, remove it
                 else {
-                    try? SchemaDatabase.shared.removeDatabase(&self.databases[id: database.id]!)
+                    try? SchemaDatabase.shared.removeDatabase(database)
                     self.databases.remove(database)
                 }
                 // remove this database from the draft so we can know anything that remains was added
                 draftDatabases.remove(database)
             }
-            // update everything that was added; it was added as an empty version, so we need to change it
-            for var database in draftDatabases {
-                try? SchemaDatabase.shared.updateDatabase(&database)
+            // add everything that's new
+            for database in draftDatabases {
+                try? SchemaDatabase.shared.addDatabase(database)
             }
             self.databases += draftDatabases
         }
@@ -142,17 +142,14 @@ final class EditDatabasesModel: ViewModel {
         if isEditing {
             // we may have changed multiple databases, so we're responsible for updating the SchemaDatabase
             parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: true)
-            // TODO: commit transaction
         }
         else {
             draftDatabases = databases
-            // TODO: start transaction
         }
         isEditing.toggle()
     }
     
     override func cancelButtonPressed() {
-        // TODO: cancel/revert transaction
         isEditing = false
     }
     

@@ -17,13 +17,12 @@ enum EditTableViewState {
 protocol DatabaseTableSaver: AnyObject {
     func updateTable(table: DatabaseTable)
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
-    var tables: IdentifiedArrayOf<DatabaseTable> { get }
 }
 
 extension EditDatabaseModel: DatabaseTableSaver {
     func updateTable(table: DatabaseTable) {
         tables[id: table.id] = table
-        try? SchemaDatabase.shared.updateTable(&tables[id: table.id]!)
+        try? SchemaDatabase.shared.updateTable(table)
         parentModel?.updateDatabase(database: database)
     }
     

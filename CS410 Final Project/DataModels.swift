@@ -7,39 +7,39 @@
 
 import Foundation
 import IdentifiedCollections
+import Tagged
 // used for the DatabaseTable and DatabaseColumn's static properties for their images
 import SwiftUI
 import GRDB
 
 struct Database: Identifiable {
-    public private(set) var id: Int64?
+    public private(set) var id: Tagged<Self, UUID>
     var name: String
     // TODO: use GRDB to store and access Database.tables
     var tables: IdentifiedArrayOf<DatabaseTable> {
         return (try? SchemaDatabase.shared.tablesFor(databaseID: id)) ?? []
     }
     
-    init(name: String, id: Int64? = nil) {
+    init(name: String, id: Database.ID? = nil) {
         self.name = name
-        self.id = id
-        // TODO: we would ideally want to use an environment variable or something instead of SchemaDatabase.shared so that a user could use their own database
-        try? SchemaDatabase.shared.addDatabase(&self)
-    }
-    
-    mutating func initializeID(to id: Int64) {
-        if self.id == nil {
+        if let id {
             self.id = id
+        }
+        else {
+            self.id = Database.ID(UUID())
         }
     }
 }
 
 extension Database {
+    static let mockID: Self.ID = Self.ID(UUID())
+    
     static var empty: Database {
         return Database(name: "")
     }
     
     static var mockDatabase: Database {
-        return Database(name: "Database A", id: -1)
+        return Database(name: "Database A", id: Database.mockID)
     }
 }
 
@@ -53,9 +53,9 @@ extension Database: Equatable, Hashable {
 
 struct DatabaseTable: Identifiable, Equatable, Hashable{
     // while the primary key should identify it, we want our own ID in case the user wants to change the primary key later
-    public private(set) var id: Int64?
+    public private(set) var id: Tagged<Self, UUID>
     // which database this belongs to
-    var databaseID: Int64
+    var databaseID: Database.ID
     
     enum PrimaryKey: Equatable, Hashable {
         case id(DatabaseTable.ID)
@@ -78,27 +78,21 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     // TODO?: is this functionality necessary? having to show helper tables to work on them and add data will be kind of annoying
     var shouldShow: Bool
     
-    init(name: String, shouldShow: Bool = true, id: Int64? = nil, columns: IdentifiedArrayOf<DatabaseColumn> = [], rows: IdentifiedArrayOf<DatabaseRow> = [], databaseID: Int64) {
+    init(name: String, shouldShow: Bool = true, id: Self.ID? = nil, columns: IdentifiedArrayOf<DatabaseColumn> = [], rows: IdentifiedArrayOf<DatabaseRow> = [], databaseID: Database.ID) {
         self.name = name
         self.shouldShow = shouldShow
-        self.id = id
-        self.databaseID = databaseID
-        try? SchemaDatabase.shared.addTable(&self)
-    }
-    
-    mutating func initializeID(to id: Int64) {
-        if self.id == nil {
+        if let id {
             self.id = id
         }
+        else {
+            self.id = Self.ID(UUID())
+        }
+        self.databaseID = databaseID
     }
     
     mutating func removeColumn(_ column: DatabaseColumn) {
-        var myColumn = column
-        try? SchemaDatabase.shared.removeColumn(&myColumn)
         for var instance in rows {
-            if let id = column.id {
-                instance.removeValueFor(columnID: id)
-            }
+            instance.removeValueFor(columnID: column.id)
         }
     }
     
@@ -110,12 +104,8 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     }
     
     mutating func addColumn(_ column: DatabaseColumn) {
-        var myColumn = column
-        try? SchemaDatabase.shared.addColumn(&myColumn)
         for var instance in rows {
-            if let id = column.id {
-                instance.updateValueFor(columnID: id, newValue: nil)
-            }
+            instance.updateValueFor(columnID: column.id, newValue: nil)
         }
     }
     
@@ -150,16 +140,18 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
 }
 
 extension DatabaseTable {
-    static func empty(databaseID: Int64) -> DatabaseTable {
+    static let mockID = Self.ID(UUID())
+    
+    static func empty(databaseID: Database.ID) -> DatabaseTable {
         return DatabaseTable(name: "", databaseID: databaseID)
     }
     
     static var mockDatabaseTable: DatabaseTable {
-        return DatabaseTable(name: "Table A", id: -1, columns: [.mockColumn], databaseID: -1)
+        return DatabaseTable(name: "Table A", id: DatabaseTable.mockID, columns: [.mockColumn], databaseID: Database.mockID)
     }
     
     static func shouldShowImage(shouldShow: Bool) -> Image {
-        Image(systemName: shouldShow ? "key.fill" : "key")
+        Image(systemName: shouldShow ? "eye.fill" : "eye.slash")
     }
 }
 
@@ -176,7 +168,7 @@ enum ValueType: String, Equatable, Hashable, Codable, DatabaseValueConvertible {
 // MARK: - DatabaseColumn
 
 struct DatabaseColumn: Identifiable, Equatable, Hashable {
-    public private(set) var id: Int64?
+    public private(set) var id: Tagged<Self, UUID>
     // whether this column is part of the primary key for its table. a column should be marked as primary if the value of all primary columns for a table are enough to uniquely determine which row has those values.
     var isPrimary: Bool
     // the title of this column
@@ -184,37 +176,37 @@ struct DatabaseColumn: Identifiable, Equatable, Hashable {
     // which data type this column should hold
     var type: ValueType
     // if type is .table, which DatabaseTable this DatabaseColumn holds
-    var associatedTableID: Int64?
+    var associatedTableID: DatabaseTable.ID?
     // which DatabaseTable holds this column
-    var tableID: Int64
+    var tableID: DatabaseTable.ID
     
-    init(name: String, type: ValueType, isPrimary: Bool = false, id: Int64? = nil, tableID: Int64) {
+    init(name: String, type: ValueType, isPrimary: Bool = false, id: Self.ID? = nil, tableID: DatabaseTable.ID) {
         self.name = name
         self.type = type
         self.isPrimary = isPrimary
-        self.id = id
-        self.tableID = tableID
-        try? SchemaDatabase.shared.addColumn(&self)
-    }
-    
-    mutating func initializeID(to id: Int64) {
-        if self.id == nil {
+        if let id {
             self.id = id
         }
+        else {
+            self.id = Self.ID(UUID())
+        }
+        self.tableID = tableID
     }
 }
 
 extension DatabaseColumn {
+    static let mockID = Self.ID(UUID())
+    
     var valueType: String {
         return type.rawValue
     }
     
-    static func empty(tableID: Int64) -> DatabaseColumn {
+    static func empty(tableID: DatabaseTable.ID) -> DatabaseColumn {
         return DatabaseColumn(name: "", type: .string, tableID: tableID)
     }
     
     static var mockColumn: DatabaseColumn {
-        return DatabaseColumn(name: "Column A", type: .string, id: -1, tableID: -1)
+        return DatabaseColumn(name: "Column A", type: .string, id: DatabaseColumn.mockID, tableID: DatabaseTable.mockID)
     }
     
     static func primaryKeyImage(isPrimary: Bool) -> Image {
@@ -222,36 +214,39 @@ extension DatabaseColumn {
     }
 }
 
-// MARK: - StoredValue
+// MARK: - StoredByUser
 
 // TODO: this may be unnecessary beacuse I can add a column with data type determined by a switch statement
-protocol StoredValue: Equatable, Hashable, Codable, CustomStringConvertible {
-    ///
-    /// - returns: nil if the value passed is nil, otherwise the result of running the constructor on the unwrapped value; implemented automatically using the required failable init
-    static func from(databaseValue: String?) -> Self?
-    init?(_ _: String)
+protocol StoredByUser: Equatable, Hashable, Codable, CustomStringConvertible {
+//    ///
+//    /// - returns: nil if the value passed is nil, otherwise the result of running the constructor on the unwrapped value; implemented automatically using the required failable init
+//    static func from(databaseValue: String?) -> Self?
+//    init?(_ _: String)
 }
 
-extension StoredValue {
-    static func from(databaseValue: String?) -> Self? {
-        if databaseValue == nil {
-            return nil
-        }
-        else {
-            return Self(databaseValue!)
-        }
-    }
+extension StoredByUser {
+//    static func from(databaseValue: String?) -> Self? {
+//        if databaseValue == nil {
+//            return nil
+//        }
+//        else {
+//            return Self(databaseValue!)
+//        }
+//    }
 }
 
-extension Int: StoredValue { }
-extension String: StoredValue { }
-extension Bool: StoredValue { }
-extension Double: StoredValue { }
-extension Int64: StoredValue { }
+extension Int: StoredByUser { }
+extension String: StoredByUser { }
+extension Bool: StoredByUser { }
+extension Double: StoredByUser { }
+// TODO: is a Tagged<Self, UUID> stored as itself or as a string/text? there's documentation on it somewhere
+//extension Tagged<Database, UUID>: StoredByUser { }
+extension Tagged<DatabaseTable, UUID>: StoredByUser { } // it has a constructor from a string, but it has a parameter label so it doesn't comply to the protocol
+//extension Tagged<DatabaseColumn, UUID>: StoredByUser { }
 
 // for converting from a raw value to what to store in the database
 extension String {
-    static func from(value: (any StoredValue)?) -> String? {
+    static func from(value: (any StoredByUser)?) -> String? {
         if value == nil {
             return nil
         }
@@ -261,18 +256,18 @@ extension String {
     }
 }
 
-func valueFrom(databaseValue: String?, type: ValueType) -> (any StoredValue)? {
+func valueFrom(databaseValue: String?, type: ValueType) -> (any StoredByUser)? {
     switch type {
     case .int:
-        return Int.from(databaseValue: databaseValue)
+        return Int(databaseValue ?? "")
     case .string:
-        return String.from(databaseValue: databaseValue)
+        return databaseValue
     case .double:
-        return Double.from(databaseValue: databaseValue)
+        return Double(databaseValue ?? "")
     case .bool:
-        return Bool.from(databaseValue: databaseValue)
+        return Bool(databaseValue ?? "")
     case .table:
-        return Int64.from(databaseValue: databaseValue)
+        return DatabaseTable.ID(uuidString: databaseValue ?? "")
     }
 }
 
@@ -280,58 +275,55 @@ func valueFrom(databaseValue: String?, type: ValueType) -> (any StoredValue)? {
 
 // TODO: adding and removing a row can be done in the database, so this may not be necessary
 struct DatabaseRow: Identifiable, Equatable, Hashable {
-    public private(set) var id: Int64?
+    public private(set) var id: Tagged<Self, UUID>
     // which DatabaseTable this is an instance of
-    var tableID: Int64
+    var tableID: DatabaseTable.ID
     // https://developer.apple.com/documentation/swift/dictionary
     // TODO: computed property that looks up data in the database
-    var columns: Dictionary<Int64, DatabaseEntry>
+    // TODO: is this necessary?
+    var values: Dictionary<DatabaseColumn.ID, DatabaseEntry>
     
-    init(columns: IdentifiedArrayOf<DatabaseColumn>? = nil, id: Int64? = nil, tableID: Int64) {
-        self.id = id
-        self.columns = [:]
+    init(columns: IdentifiedArrayOf<DatabaseColumn>? = nil, id: Self.ID? = nil, tableID: DatabaseTable.ID) {
+        if let id {
+            self.id = id
+        }
+        else {
+            self.id = Self.ID(UUID())
+        }
+        self.values = [:]
         if let columns {
             for column in columns {
-                #warning("defaulting rowID and columnID to -2 in DatabaseRow.init")
-                let column = DatabaseEntry(rowID: id ?? -2, columnID: column.id ?? -2, value: nil)
-                self.columns[column.id ?? -2] = column
+                let entry = DatabaseEntry(rowID: self.id, columnID: column.id, value: nil)
+                self.values[column.id] = entry
             }
         }
         self.tableID = tableID
     }
     
-    func valueFor(columnID: Int64) -> (any StoredValue)? {
-        return columns[columnID]?.value
-    }
-    
-    ///
-    /// if the ID has not already been set, set it to the given ID.
-    mutating func initializeID(to id: Int64) {
-        if self.id == nil {
-            self.id = id
-        }
+    func valueFor(columnID: DatabaseColumn.ID) -> (any StoredByUser)? {
+        return values[columnID]?.value
     }
     
     ///
     /// if the row has this column, it will update its value. otherwise, it will add this column to its columns and give it the given value
-    mutating func updateValueFor(columnID: Int64, newValue: (any StoredValue)?) {
-        if columns[columnID] != nil {
-            columns[columnID]!.value = .from(value: newValue)
+    mutating func updateValueFor(columnID: DatabaseColumn.ID, newValue: (any StoredByUser)?) {
+        if values[columnID] != nil {
+            values[columnID]!.value = .from(value: newValue)
         }
         else {
-            columns[columnID] = DatabaseEntry(rowID: id ?? -2, columnID: columnID, value: newValue)
+            values[columnID] = DatabaseEntry(rowID: id, columnID: columnID, value: newValue)
         }
     }
     
-    mutating func removeValueFor(columnID: Int64) {
+    mutating func removeValueFor(columnID: DatabaseColumn.ID) {
         // assigning a dictionary's value for a given type sets it to nil
-        columns[columnID] = nil
+        values[columnID] = nil
     }
 }
 
 extension DatabaseRow {
     // TODO: empty as an instance method of the parent class instead? or even the addRow makes its own instead of using this
-    static func empty(tableID: Int64) -> DatabaseRow {
+    static func empty(tableID: DatabaseTable.ID) -> DatabaseRow {
         return DatabaseRow(tableID: tableID)
     }
 }
@@ -346,22 +338,21 @@ extension DatabaseRow: CustomStringConvertible {
 
 // TODO: deal with data directly with the database so this is unnecessary
 struct DatabaseEntry: Identifiable {
-    public private(set) var id: Int64?
-    var rowID: Int64
-    var columnID: Int64
+    public private(set) var id: Tagged<Self, UUID>
+    var rowID: DatabaseRow.ID
+    var columnID: DatabaseColumn.ID
     // TODO: can I make this like a Byte type that is just stored in the database as bits?
     var value: String?
     
-    init(rowID: Int64, columnID: Int64, value: (any StoredValue)?) {
+    init(rowID: DatabaseRow.ID, columnID: DatabaseColumn.ID, value: (any StoredByUser)?, id: Self.ID? = nil) {
         self.rowID = rowID
         self.columnID = columnID
         self.value = String.from(value: value)
-    }
-
-    /// if the ID has not already been set, set it to the given ID.
-    mutating func initializeID(to id: Int64) {
-        if self.id == nil {
+        if let id {
             self.id = id
+        }
+        else {
+            self.id = Self.ID(UUID())
         }
     }
 }
@@ -385,10 +376,6 @@ extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRec
     enum Columns {
         static let name = Column(CodingKeys.name)
     }
-    
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID
-    }
 }
 
 extension DatabaseTable: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
@@ -408,10 +395,6 @@ extension DatabaseTable: Codable, TableRecord, FetchableRecord, MutablePersistab
         static let name = Column(CodingKeys.name)
         static let shouldShow = Column(CodingKeys.shouldShow)
     }
-    
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID
-    }
 }
 
 extension DatabaseColumn: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
@@ -426,10 +409,6 @@ extension DatabaseColumn: Codable, TableRecord, FetchableRecord, MutablePersista
         static let isPrimary = Column(CodingKeys.isPrimary)
         static let type = Column(CodingKeys.type)
     }
-    
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID
-    }
 }
 
 extension DatabaseRow: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
@@ -438,10 +417,6 @@ extension DatabaseRow: Codable, TableRecord, FetchableRecord, MutablePersistable
     
     // TODO: does this need to have a different using to look up by DatabaseColumn ID?
     static let columns = hasMany(DatabaseEntry.self, using: DatabaseEntry.rowForeignKey)
-    
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID
-    }
 }
 
 extension DatabaseEntry: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
@@ -450,9 +425,5 @@ extension DatabaseEntry: Codable, TableRecord, FetchableRecord, MutablePersistab
     
     enum Columns {
         static let value = Column(CodingKeys.value)
-    }
-    
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID
     }
 }

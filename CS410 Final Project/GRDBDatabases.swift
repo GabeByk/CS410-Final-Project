@@ -31,13 +31,18 @@ struct SchemaDatabase {
         return identifiedDatabases
     }
     
-    func addDatabase(_ database: inout Database) throws {
+    func addDatabase(_ database: Database) throws {
+        // insert is marked as mutating, but because we no longer use an autoincrementing primary key, it doesn't actually mutate the value
+        // also, this is called when exiting edit mode, after which the local data is synced with the database, so if it does actually get mutated it should pull that
+        // if it turns out it does mutate localDatabase in a meaningful way, database should be an inout parameter so its value is changed
+        var localDatabase = database
         try dbWriter.write() { db in
-            try database.insert(db)
+            try localDatabase.insert(db)
         }
+        print(localDatabase == database)
     }
     
-    func removeDatabase(_ database: inout Database) throws {
+    func removeDatabase(_ database: Database) throws {
         // TODO: why am I getting a warning "Result of call to 'write' is unused" but not in addDatabase or updateDatabase
         // if i just add 'print(db)' inside the body it seems happy; maybe delete isn't marked as using the database or something?
         try dbWriter.write() { db in
@@ -45,7 +50,7 @@ struct SchemaDatabase {
         }
     }
     
-    func updateDatabase(_ database: inout Database) throws {
+    func updateDatabase(_ database: Database) throws {
         try dbWriter.write() { db in
             try database.update(db)
         }
@@ -82,19 +87,20 @@ struct SchemaDatabase {
         return identifiedTables
     }
     
-    func addTable(_ table: inout DatabaseTable) throws {
+    func addTable(_ table: DatabaseTable) throws {
+        var localTable = table
         try dbWriter.write() { db in
-            try table.insert(db)
+            try localTable.insert(db)
         }
     }
     
-    func removeTable(_ table: inout DatabaseTable) throws {
+    func removeTable(_ table: DatabaseTable) throws {
         try dbWriter.write() { db in
             try table.delete(db)
         }
     }
     
-    func updateTable(_ table: inout DatabaseTable) throws {
+    func updateTable(_ table: DatabaseTable) throws {
         try dbWriter.write() { db in
             try table.update(db)
         }
@@ -131,19 +137,20 @@ struct SchemaDatabase {
         return identifiedColumns
     }
     
-    func addColumn(_ column: inout DatabaseColumn) throws {
+    func addColumn(_ column: DatabaseColumn) throws {
+        var local = column
         try dbWriter.write() { db in
-            try column.insert(db)
+            try local.insert(db)
         }
     }
     
-    func removeColumn(_ column: inout DatabaseColumn) throws {
+    func removeColumn(_ column: DatabaseColumn) throws {
         try dbWriter.write() { db in
             try column.delete(db)
         }
     }
     
-    func updateColumn(_ column: inout DatabaseColumn) throws {
+    func updateColumn(_ column: DatabaseColumn) throws {
         try dbWriter.write() { db in
             try column.update(db)
         }
@@ -165,12 +172,13 @@ struct SchemaDatabase {
                // Create a table
                // See <https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseschema>
                try db.create(table: "database") { t in
-                   t.autoIncrementedPrimaryKey("id")
+                   // TODO: how is a Tagged<Self, UUID> stored? reference documentation
+                   t.primaryKey("id", .blob)
                    t.column("name", .text).notNull()
                }
                
                try db.create(table: "databaseTable") { t in
-                   t.autoIncrementedPrimaryKey("id")
+                   t.primaryKey("id", .blob)
                    t.column("databaseID", .integer)
                        .notNull()
                        .indexed()
@@ -180,7 +188,7 @@ struct SchemaDatabase {
                }
                
                try db.create(table: "databaseColumn") { t in
-                   t.autoIncrementedPrimaryKey("id")
+                   t.primaryKey("id", .blob)
                    t.column("tableID", .integer)
                        .notNull()
                        .indexed()
@@ -276,12 +284,12 @@ extension SchemaDatabase {
 
 /// One of these objects manages the information for an entry in the SchemaDatabase's database table
 struct DataDatabase {
-    let databaseID: Int64
+    let databaseID: Database.ID
     
     // the number of transactions so each migration has a unique name
     var transactionCount: Int = 0
     
-    init(databaseID: Int64, _ dbWriter: any DatabaseWriter) {
+    init(databaseID: Database.ID, _ dbWriter: any DatabaseWriter) {
         self.databaseID = databaseID
         self.dbWriter = dbWriter
     }
@@ -292,17 +300,12 @@ struct DataDatabase {
             transactionCount += 1
         }
         // run SQL to add the table
-        if table.id != nil {
-            var migrator = DatabaseMigrator()
+        var migrator = DatabaseMigrator()
             
-            migrator.registerMigration("createTable\(table.id!)\(transactionCount)") { db in
-                try db.create(table: "\(table.id!)") { t in
-                    t.autoIncrementedPrimaryKey("id")
-                }
+        migrator.registerMigration("createTable\(table.id)\(transactionCount)") { db in
+            try db.create(table: "\(table.id)") { t in
+                t.autoIncrementedPrimaryKey("id")
             }
-        }
-        else {
-            print("Tried to create uninitialized table \(table.name)!")
         }
     }
     
@@ -312,15 +315,10 @@ struct DataDatabase {
             transactionCount += 1
         }
         // run SQL to remove the table
-        if table.id != nil {
-            var migrator = DatabaseMigrator()
-            
-            migrator.registerMigration("removeTable\(table.id!)\(transactionCount)") { db in
-                try db.drop(table: "\(table.id!)")
-            }
-        }
-        else {
-            print("Tried to delete uninitialized table \(table.name)!")
+        var migrator = DatabaseMigrator()
+        
+        migrator.registerMigration("removeTable\(table.id)\(transactionCount)") { db in
+            try db.drop(table: "\(table.id)")
         }
     }
     
@@ -330,37 +328,35 @@ struct DataDatabase {
             transactionCount += 1
         }
         // run SQL to add the column
-        if column.id != nil {
-            var migrator = DatabaseMigrator()
+        var migrator = DatabaseMigrator()
             
-            migrator.registerMigration("addColumn\(column.id!)ToTable\(column.tableID)\(transactionCount)") { db in
-                try db.alter(table: "\(column.tableID)") { t in
-                    var columnAdded = false
-                    let dataType: GRDB.Database.ColumnType
-                    switch column.type {
-                    case .table:
-                        dataType = .integer
-                        if let otherTableID = column.associatedTableID {
-                            t.add(column: "\(column.id!)", dataType)
-                                .indexed()
-                                .references("\(otherTableID)")
-                        }
-                        else {
-                            print("Tried to add column \(column.name) referencing a table, but the other table's ID was nil")
-                        }
-                        columnAdded = true
-                    case .int:
-                        dataType = .integer
-                    case .string:
-                        dataType = .text
-                    case .bool:
-                        dataType = .boolean
-                    case .double:
-                        dataType = .double
+        migrator.registerMigration("addColumn\(column.id)ToTable\(column.tableID)\(transactionCount)") { db in
+            try db.alter(table: "\(column.tableID)") { t in
+                var columnAdded = false
+                let dataType: GRDB.Database.ColumnType
+                switch column.type {
+                case .table:
+                    dataType = .integer
+                    if let otherTableID = column.associatedTableID {
+                        t.add(column: "\(column.id)", dataType)
+                            .indexed()
+                            .references("\(otherTableID)")
                     }
-                    if !columnAdded {
-                        t.add(column: "\(column.id!)", dataType)
+                    else {
+                        print("Tried to add column \(column.name) referencing a table, but the other table's ID was nil")
                     }
+                    columnAdded = true
+                case .int:
+                    dataType = .integer
+                case .string:
+                    dataType = .text
+                case .bool:
+                    dataType = .boolean
+                case .double:
+                    dataType = .double
+                }
+                if !columnAdded {
+                    t.add(column: "\(column.id)", dataType)
                 }
             }
         }
@@ -372,13 +368,11 @@ struct DataDatabase {
             transactionCount += 1
         }
         // run SQL to remove the column
-        if column.id != nil {
-            var migrator = DatabaseMigrator()
-            
-            migrator.registerMigration("removeColumn\(column.id!)FromTable\(column.tableID)") { db in
-                try db.alter(table: "\(column.tableID)") { t in
-                    t.drop(column: "\(column.id!)")
-                }
+        var migrator = DatabaseMigrator()
+        
+        migrator.registerMigration("removeColumn\(column.id)FromTable\(column.tableID)") { db in
+            try db.alter(table: "\(column.tableID)") { t in
+                t.drop(column: "\(column.id)")
             }
         }
     }
@@ -391,9 +385,18 @@ struct DataDatabase {
         addColumn(column)
     }
     
-    /// Scans the SchemaDatabase and ensures all tables and columns are up to date. TODO: implement this method
-    mutating func sync() {
-        // TODO: sync the schema with SchemaDatabase
+    /// Scans the SchemaDatabase and ensures all tables and columns are up to date.
+    mutating func sync() throws {
+        // TODO: remove all tables/purge the database? how else do we remove any tables/columns that don't exist anymore?
+        if let tables = try? SchemaDatabase.shared.tablesFor(databaseID: databaseID) {
+            for table in tables {
+                addTable(table)
+                let columns = table.columns
+                for column in columns {
+                    addColumn(column)
+                }
+            }
+        }
     }
     
     private let dbWriter: any DatabaseWriter
@@ -401,7 +404,7 @@ struct DataDatabase {
 
 extension DataDatabase {
     /// Creates an instance connected to the Database object with the given ID.
-    static func discDatabaseFor(id: Int64) -> DataDatabase {
+    static func discDatabaseFor(databaseID id: Database.ID) -> DataDatabase {
         do {
             // Choose folder
             let fileManager = FileManager()
@@ -430,7 +433,7 @@ extension DataDatabase {
     }
     
     /// removes all data for the specified database from the disc
-    static func deleteDataFor(id: Int64) {
+    static func deleteDataFor(databaseID id: Database.ID) {
         // TODO: delete a file/directory (/databases/id)
     }
 }

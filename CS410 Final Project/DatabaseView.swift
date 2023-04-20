@@ -17,7 +17,8 @@ protocol DatabaseSaver: AnyObject {
 extension EditDatabasesModel: DatabaseSaver {
     func updateDatabase(database: Database) {
         self.draftDatabases[id: database.id] = database
-        try? SchemaDatabase.shared.updateDatabase(&draftDatabases[id: database.id]!)
+        // we may need to update the database (e.g. the name might have changed)
+        try? SchemaDatabase.shared.updateDatabase(database)
         // we updated the database, so the parentModel doesn't need to
         parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: false)
     }
@@ -40,42 +41,45 @@ final class EditDatabaseModel: ViewModel {
     }
     
     override func editButtonPressed() {
+        // if we're exiting editing mode, update the database
         if isEditing {
-            // the DatabaseTable constructor automatically adds any new tables and removeTables removes them, so we just need to make sure all the tables in tables are up to date in the database
-            for var table in tables {
-                try? SchemaDatabase.shared.updateTable(&table)
+            // database.tables is a computed property that returns all of the tables for this database currently stored in SchemaDatabase.shared
+            for table in database.tables {
+                // if we both have a table of this id, update the database to have our version
+                if let updatedTable = tables[id: table.id] {
+                    try? SchemaDatabase.shared.updateTable(updatedTable)
+                    // removing this means that the only values in tables after this loop ends are those that the user added to the database during this edit
+                    tables.remove(updatedTable)
+                }
+                // if the database has it and we don't, remove it from the database
+                else {
+                    try? SchemaDatabase.shared.removeTable(table)
+                }
+            }
+            // anything left in tables at this point must have been added, so add it to the database
+            for table in tables {
+                try? SchemaDatabase.shared.addTable(table)
             }
             parentModel?.updateDatabase(database: database)
             if parentModel == nil {
                 print("No parentModel to save changes")
             }
-            // TODO: commit transaction
         }
-        else {
-            // TODO: start transaction
-            self.tables = database.tables
-        }
+        // I would think that I only need to set this when entering edit mode, but for some reason not setting it when exiting edit mode causes a crash when renaming an empty table. Similarly, adding this line to cancelButtonPressed causes a crash when cancelling adding a table with a non-empty name.
+        self.tables = database.tables
         isEditing.toggle()
     }
     
     override func cancelButtonPressed() {
         isEditing = false
-        // TODO: cancel transaction
     }
     
     func addTable() {
-        #warning("defaulting draftDatabaseID to -2 in EditDatabaseModel.addTable")
-        var table = DatabaseTable.empty(databaseID: database.id ?? -2)
-        // curently the constructor automatically adds it, but if we do it we would do it here
-        try? SchemaDatabase.shared.addTable(&table)
+        let table = DatabaseTable.empty(databaseID: database.id)
         tables.append(table)
     }
     
     func removeTables(at offsets: IndexSet) {
-        for offset in offsets {
-            var table = tables[offset]
-            try? SchemaDatabase.shared.removeTable(&table)
-        }
         tables.remove(atOffsets: offsets)
     }
 }
@@ -136,6 +140,7 @@ struct EditDatabase: View {
                 if model.database.tables.count == 0 {
                     Text("Try adding some tables in the edit view!")
                 }
+                // TODO: show a little helper telling the user all their tables are hidden and they'll need to enter the edit view to show them again
             }
         }
     }

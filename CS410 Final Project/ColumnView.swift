@@ -11,22 +11,17 @@ import IdentifiedCollections
 protocol ColumnSaver: AnyObject {
     func updateColumn(_ column: DatabaseColumn)
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
-    var tables: IdentifiedArrayOf<DatabaseTable> { get }
 }
 
 extension EditColumnsModel: ColumnSaver {
     func updateColumn(_ column: DatabaseColumn) {
         columns[id: column.id] = column
-        try? SchemaDatabase.shared.updateColumn(&columns[id: column.id]!)
+        try? SchemaDatabase.shared.updateColumn(column)
         parentModel?.updateTable(table)
     }
     
     func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
         return parentModel?.tableFor(id: id)
-    }
-    
-    var tables: IdentifiedArrayOf<DatabaseTable> {
-        return parentModel?.tables ?? []
     }
 }
 
@@ -54,7 +49,8 @@ final class EditColumnModel: ViewModel {
                 draftColumn.type = .bool
                 draftColumn.associatedTableID = nil
             case ValueType.table.rawValue:
-                if let id = Int64(selectedTable) {
+                // https://developer.apple.com/documentation/foundation/uuid/3126814-init
+                if let id = DatabaseTable.ID(uuidString: selectedTable) {
                     draftColumn.type = .table
                     draftColumn.associatedTableID = id
                 }
@@ -70,7 +66,7 @@ final class EditColumnModel: ViewModel {
     
     @Published var selectedTable: String = "None" {
         didSet {
-            if let id = Int64(selectedTable) {
+            if let id = DatabaseTable.ID(uuidString: selectedTable) {
                 draftColumn.type = .table
                 draftColumn.associatedTableID = id
             }
@@ -88,7 +84,7 @@ final class EditColumnModel: ViewModel {
         self.types = [ValueType.string.rawValue, ValueType.int.rawValue, ValueType.double.rawValue, ValueType.bool.rawValue, ValueType.table.rawValue]
         super.init(isEditing: isEditing)
         if let table = associatedTable {
-            self.selectedTable = table.id == nil ? "None" : String(describing: table.id!)
+            self.selectedTable = table.id.uuidString
         }
         else {
             selectedTable = tables.first ?? "None"
@@ -96,10 +92,10 @@ final class EditColumnModel: ViewModel {
     }
     
     var tables: [String] {
-        let tables = parentModel?.tables ?? []
+        let tables = (try? SchemaDatabase.shared.allTables()) ?? []
         var ids: [String] = ["None"]
         for table in tables {
-            ids.append(table.id == nil ? "Uninitialized Table ID" : String(describing: table.id!))
+            ids.append(table.id.uuidString)
         }
         return ids
     }
@@ -129,7 +125,7 @@ final class EditColumnModel: ViewModel {
             draftColumn = column
             selectedType = column.valueType
             if let table = associatedTable {
-                selectedTable = String(describing: table.id!)
+                selectedTable = table.id.uuidString
             }
             else {
                 selectedTable = "None"
@@ -177,7 +173,7 @@ struct EditColumn: View {
                         // TODO: picker view that you can scroll through
                         Picker("Table:", selection: $model.selectedTable) {
                             ForEach(model.tables, id:\.self) { rowID in
-                                if let id = Int64(rowID) {
+                                if let id = DatabaseTable.ID(uuidString: rowID) {
                                     Text(model.parentModel?.tableFor(id: id)?.name ?? "Table not found")
                                 }
                                 else {
@@ -218,6 +214,6 @@ struct EditColumn: View {
 
 struct ColumnView_Preview: PreviewProvider {
     static var previews: some View {
-        EditColumn(model: EditColumnModel(column: .empty(tableID: -1), isEditing: true))
+        EditColumn(model: EditColumnModel(column: .empty(tableID: DatabaseTable.mockID), isEditing: true))
     }
 }

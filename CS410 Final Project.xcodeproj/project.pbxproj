@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		000104C629D6520800316B3A /* TableRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000104C529D6520800316B3A /* TableRowView.swift */; };
-		000104C829D6528600316B3A /* EditPropertiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000104C729D6528600316B3A /* EditPropertiesView.swift */; };
+		000104C829D6528600316B3A /* ColumnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000104C729D6528600316B3A /* ColumnsView.swift */; };
 		00203CE429C8F68A00AC0240 /* CS410_Final_ProjectApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */; };
 		00203CE629C8F68A00AC0240 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00203CE529C8F68A00AC0240 /* ContentView.swift */; };
 		00203CE829C8F68C00AC0240 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00203CE729C8F68C00AC0240 /* Assets.xcassets */; };
@@ -27,7 +27,7 @@
 
 /* Begin PBXFileReference section */
 		000104C529D6520800316B3A /* TableRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableRowView.swift; sourceTree = "<group>"; };
-		000104C729D6528600316B3A /* EditPropertiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditPropertiesView.swift; sourceTree = "<group>"; };
+		000104C729D6528600316B3A /* ColumnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnsView.swift; sourceTree = "<group>"; };
 		00203CE029C8F68A00AC0240 /* CS410 Final Project.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CS410 Final Project.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CS410_Final_ProjectApp.swift; sourceTree = "<group>"; };
 		00203CE529C8F68A00AC0240 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -85,7 +85,7 @@
 				00348C2429CA16A300B3E4B2 /* DatabaseView.swift */,
 				0080483129CA5A5F0074EAA0 /* TableView.swift */,
 				0047A68129CE63E9005E76EE /* ColumnView.swift */,
-				000104C729D6528600316B3A /* EditPropertiesView.swift */,
+				000104C729D6528600316B3A /* ColumnsView.swift */,
 				000104C529D6520800316B3A /* TableRowView.swift */,
 				004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */,
 			);
@@ -181,7 +181,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				00203CE629C8F68A00AC0240 /* ContentView.swift in Sources */,
-				000104C829D6528600316B3A /* EditPropertiesView.swift in Sources */,
+				000104C829D6528600316B3A /* ColumnsView.swift in Sources */,
 				00348C2529CA16A300B3E4B2 /* DatabaseView.swift in Sources */,
 				00348C1929CA00EB00B3E4B2 /* AppModel.swift in Sources */,
 				00348C1B29CA01A400B3E4B2 /* DataModels.swift in Sources */,
