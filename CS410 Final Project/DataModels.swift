@@ -15,9 +15,8 @@ import GRDB
 struct Database: Identifiable {
     public private(set) var id: Tagged<Self, UUID>
     var name: String
-    // TODO: use GRDB to store and access Database.tables
     var tables: IdentifiedArrayOf<DatabaseTable> {
-        return (try? SchemaDatabase.shared.tablesFor(databaseID: id)) ?? []
+        return SchemaDatabase.used.tablesFor(databaseID: id)
     }
     
     init(name: String, id: Database.ID? = nil) {
@@ -65,17 +64,14 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     
     var name: String
     
-    // TODO: get rows from the appropriate database based on databaseID
     var rows: IdentifiedArrayOf<DatabaseRow> {
-        return []
+        return DataDatabase.discDatabaseFor(databaseID: databaseID).rowsFor(table: self)
     }
     
-    // TODO: use GRDB to access columns
     var columns: IdentifiedArrayOf<DatabaseColumn> {
-        return (try? SchemaDatabase.shared.columnsFor(tableID: id)) ?? []
+        return SchemaDatabase.used.columnsFor(tableID: id)
     }
     
-    // TODO?: is this functionality necessary? having to show helper tables to work on them and add data will be kind of annoying
     var shouldShow: Bool
     
     init(name: String, shouldShow: Bool = true, id: Self.ID? = nil, columns: IdentifiedArrayOf<DatabaseColumn> = [], rows: IdentifiedArrayOf<DatabaseRow> = [], databaseID: Database.ID) {
@@ -105,14 +101,21 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
     
     mutating func addColumn(_ column: DatabaseColumn) {
         for var instance in rows {
-            instance.updateValueFor(columnID: column.id, newValue: nil)
+            let newValue: StoredValue
+            switch column.type {
+            case .int:
+                newValue = .int(nil)
+            case .string:
+                newValue = .string(nil)
+            case .bool:
+                newValue = .bool(nil)
+            case .double:
+                newValue = .double(nil)
+            case .table:
+                newValue = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
+            }
+            instance.updateValueFor(columnID: column.id, newValue: newValue)
         }
-    }
-    
-    mutating func addInstance() {
-        // TODO: add a row to the table
-//        #warning("defaulting tableID to -2 in DatabaseTable.addInstance")
-//        rows.append(.empty(tableID: id ?? -2))
     }
     
     // could probably be a computed property but it's theta(n) for n columns, so it's a function
@@ -150,7 +153,7 @@ extension DatabaseTable {
         return DatabaseTable(name: "Table A", id: DatabaseTable.mockID, columns: [.mockColumn], databaseID: Database.mockID)
     }
     
-    static func shouldShowImage(shouldShow: Bool) -> Image {
+    var shouldShowImage: Image {
         Image(systemName: shouldShow ? "eye.fill" : "eye.slash")
     }
 }
@@ -165,6 +168,57 @@ enum ValueType: String, Equatable, Hashable, Codable, DatabaseValueConvertible {
     case table = "Table"
 }
 
+enum StoredValue: Equatable, Hashable, Codable {
+    case int(Int?)
+    case string(String?)
+    case bool(Bool?)
+    case double(Double?)
+    case row(referencedRowID: DatabaseRow.ID?, referencedTableID: DatabaseTable.ID?)
+}
+
+extension StoredValue: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case let .int(i):
+            return i == nil ? "NULL" : String(i!)
+        case let .string(s):
+            return s ?? "NULL"
+        case let .bool(b):
+            return b == nil ? "NULL" : (b! ? "True" : "False")
+        case let .double(d):
+            return d == nil ? "NULL" : String(d!)
+        case let .row(referencedRowID, referencedTableID):
+            if let referencedRowID, let referencedTableID {
+                if let table = SchemaDatabase.used.table(id: referencedTableID) {
+                    let database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                    let row = database.row(rowID: referencedRowID, tableID: referencedTableID)
+                    return row?.nonRecursiveDescription ?? "NULL"
+                }
+                return "UUID: \(referencedRowID.uuidString)"
+            }
+        }
+        return "NULL"
+    }
+    
+    var nonRecursiveDescription: String {
+        switch self {
+        case let .int(i):
+            return i == nil ? "NULL" : String(i!)
+        case let .string(s):
+            return s ?? "NULL"
+        case let .bool(b):
+            return b == nil ? "NULL" : (b! ? "True" : "False")
+        case let .double(d):
+            return d == nil ? "NULL" : String(d!)
+        case let .row(referencedRowID, _):
+            if let referencedRowID {
+                return "UUID: \(referencedRowID.uuidString)"
+            }
+        }
+        return "NULL"
+    }
+}
+
 // MARK: - DatabaseColumn
 
 struct DatabaseColumn: Identifiable, Equatable, Hashable {
@@ -176,7 +230,7 @@ struct DatabaseColumn: Identifiable, Equatable, Hashable {
     // which data type this column should hold
     var type: ValueType
     // if type is .table, which DatabaseTable this DatabaseColumn holds
-    var associatedTableID: DatabaseTable.ID?
+    var referencedTableID: DatabaseTable.ID?
     // which DatabaseTable holds this column
     var tableID: DatabaseTable.ID
     
@@ -198,7 +252,18 @@ extension DatabaseColumn {
     static let mockID = Self.ID(UUID())
     
     var valueType: String {
-        return type.rawValue
+        switch type {
+        case .table:
+            if let referencedTableID {
+                if let referencedTable = SchemaDatabase.used.table(id: referencedTableID) {
+                    return "\(referencedTable.name)"
+                }
+                return "Table not found"
+            }
+            return "Table not selected"
+        default:
+            return type.rawValue
+        }
     }
     
     static func empty(tableID: DatabaseTable.ID) -> DatabaseColumn {
@@ -209,79 +274,25 @@ extension DatabaseColumn {
         return DatabaseColumn(name: "Column A", type: .string, id: DatabaseColumn.mockID, tableID: DatabaseTable.mockID)
     }
     
-    static func primaryKeyImage(isPrimary: Bool) -> Image {
+    var primaryKeyImage: Image {
         Image(systemName: isPrimary ? "key.fill" : "key")
     }
 }
 
-// MARK: - StoredByUser
-
-// TODO: this may be unnecessary beacuse I can add a column with data type determined by a switch statement
-protocol StoredByUser: Equatable, Hashable, Codable, CustomStringConvertible {
-//    ///
-//    /// - returns: nil if the value passed is nil, otherwise the result of running the constructor on the unwrapped value; implemented automatically using the required failable init
-//    static func from(databaseValue: String?) -> Self?
-//    init?(_ _: String)
-}
-
-extension StoredByUser {
-//    static func from(databaseValue: String?) -> Self? {
-//        if databaseValue == nil {
-//            return nil
-//        }
-//        else {
-//            return Self(databaseValue!)
-//        }
-//    }
-}
-
-extension Int: StoredByUser { }
-extension String: StoredByUser { }
-extension Bool: StoredByUser { }
-extension Double: StoredByUser { }
-// TODO: is a Tagged<Self, UUID> stored as itself or as a string/text? there's documentation on it somewhere
-//extension Tagged<Database, UUID>: StoredByUser { }
-extension Tagged<DatabaseTable, UUID>: StoredByUser { } // it has a constructor from a string, but it has a parameter label so it doesn't comply to the protocol
-//extension Tagged<DatabaseColumn, UUID>: StoredByUser { }
-
-// for converting from a raw value to what to store in the database
-extension String {
-    static func from(value: (any StoredByUser)?) -> String? {
-        if value == nil {
-            return nil
-        }
-        else {
-            return String(describing: value!)
-        }
-    }
-}
-
-func valueFrom(databaseValue: String?, type: ValueType) -> (any StoredByUser)? {
-    switch type {
-    case .int:
-        return Int(databaseValue ?? "")
-    case .string:
-        return databaseValue
-    case .double:
-        return Double(databaseValue ?? "")
-    case .bool:
-        return Bool(databaseValue ?? "")
-    case .table:
-        return DatabaseTable.ID(uuidString: databaseValue ?? "")
-    }
-}
 
 // MARK: - DatabaseRow
 
-// TODO: adding and removing a row can be done in the database, so this may not be necessary
 struct DatabaseRow: Identifiable, Equatable, Hashable {
+    static func == (lhs: DatabaseRow, rhs: DatabaseRow) -> Bool {
+        return lhs.id == rhs.id // && lhs.tableID == rhs.tableID && lhs.values == rhs.values // Type 'any StoredByUser' cannot conform to Equatable
+    }
+    
     public private(set) var id: Tagged<Self, UUID>
     // which DatabaseTable this is an instance of
-    var tableID: DatabaseTable.ID
+    let tableID: DatabaseTable.ID
     // https://developer.apple.com/documentation/swift/dictionary
-    // TODO: computed property that looks up data in the database
-    // TODO: is this necessary?
-    var values: Dictionary<DatabaseColumn.ID, DatabaseEntry>
+    // TODO?: computed property that looks up data in the database
+    var values: Dictionary<DatabaseColumn.ID, StoredValue>
     
     init(columns: IdentifiedArrayOf<DatabaseColumn>? = nil, id: Self.ID? = nil, tableID: DatabaseTable.ID) {
         if let id {
@@ -293,26 +304,20 @@ struct DatabaseRow: Identifiable, Equatable, Hashable {
         self.values = [:]
         if let columns {
             for column in columns {
-                let entry = DatabaseEntry(rowID: self.id, columnID: column.id, value: nil)
-                self.values[column.id] = entry
+                self.values[column.id] = nil
             }
         }
         self.tableID = tableID
     }
     
-    func valueFor(columnID: DatabaseColumn.ID) -> (any StoredByUser)? {
-        return values[columnID]?.value
+    func valueFor(columnID: DatabaseColumn.ID) -> StoredValue? {
+        return values[columnID]
     }
     
     ///
     /// if the row has this column, it will update its value. otherwise, it will add this column to its columns and give it the given value
-    mutating func updateValueFor(columnID: DatabaseColumn.ID, newValue: (any StoredByUser)?) {
-        if values[columnID] != nil {
-            values[columnID]!.value = .from(value: newValue)
-        }
-        else {
-            values[columnID] = DatabaseEntry(rowID: id, columnID: columnID, value: newValue)
-        }
+    mutating func updateValueFor(columnID: DatabaseColumn.ID, newValue: StoredValue) {
+        values[columnID] = newValue
     }
     
     mutating func removeValueFor(columnID: DatabaseColumn.ID) {
@@ -322,7 +327,6 @@ struct DatabaseRow: Identifiable, Equatable, Hashable {
 }
 
 extension DatabaseRow {
-    // TODO: empty as an instance method of the parent class instead? or even the addRow makes its own instead of using this
     static func empty(tableID: DatabaseTable.ID) -> DatabaseRow {
         return DatabaseRow(tableID: tableID)
     }
@@ -330,47 +334,66 @@ extension DatabaseRow {
 
 extension DatabaseRow: CustomStringConvertible {
     var description: String {
-        return String(describing: id)
-    }
-}
-
-// MARK: - DatabaseEntry
-
-// TODO: deal with data directly with the database so this is unnecessary
-struct DatabaseEntry: Identifiable {
-    public private(set) var id: Tagged<Self, UUID>
-    var rowID: DatabaseRow.ID
-    var columnID: DatabaseColumn.ID
-    // TODO: can I make this like a Byte type that is just stored in the database as bits?
-    var value: String?
-    
-    init(rowID: DatabaseRow.ID, columnID: DatabaseColumn.ID, value: (any StoredByUser)?, id: Self.ID? = nil) {
-        self.rowID = rowID
-        self.columnID = columnID
-        self.value = String.from(value: value)
-        if let id {
-            self.id = id
+        if let table = SchemaDatabase.used.table(id: tableID) {
+            let primaryKey = table.primaryKey()
+            switch primaryKey {
+            case .id(_):
+                return "UUID: " + id.uuidString
+            case let .column(column):
+                if let value = valueFor(columnID: column.id) {
+                    return value.description
+                }
+                else {
+                    return "\(column.name): NULL"
+                }
+            case let .columns(columns):
+                var keyValues: String = ""
+                for column in columns {
+                    keyValues += (column.name + ": " + (values[column.id]?.description ?? "NULL"))
+                    if column != columns.last {
+                        keyValues += ", "
+                    }
+                }
+                return keyValues
+            }
         }
         else {
-            self.id = Self.ID(UUID())
+            return id.uuidString
         }
     }
-}
-
-extension DatabaseEntry: Equatable, Hashable {
-    static func == (lhs: DatabaseEntry, rhs: DatabaseEntry) -> Bool {
-        return lhs.rowID == rhs.rowID && lhs.columnID == rhs.columnID
-    }
     
-    nonisolated func hash(into hasher: inout Hasher) {
-        rowID.hash(into: &hasher)
-        columnID.hash(into: &hasher)
+    var nonRecursiveDescription: String {
+        if let table = SchemaDatabase.used.table(id: tableID) {
+            let primaryKey = table.primaryKey()
+            switch primaryKey {
+            case .id(_):
+                return "UUID: " + id.uuidString
+            case let .column(column):
+                if let value = valueFor(columnID: column.id) {
+                    return value.nonRecursiveDescription
+                }
+                else {
+                    return "\(column.name): NULL"
+                }
+            case let .columns(columns):
+                var keyValues: String = ""
+                for column in columns {
+                    keyValues += (column.name + ": " + (values[column.id]?.nonRecursiveDescription ?? "NULL"))
+                    if column != columns.last {
+                        keyValues += ", "
+                    }
+                }
+                return keyValues
+            }
+        }
+        else {
+            return id.uuidString
+        }
     }
 }
 
 // MARK: - GRDB setup
 
-// TODO: refactor to remove DatabaseRow and DatabaseEntry
 extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
     static let tables = hasMany(DatabaseTable.self, using: DatabaseTable.databaseForeignKey)
     enum Columns {
@@ -379,13 +402,6 @@ extension Database: Codable, TableRecord, FetchableRecord, MutablePersistableRec
 }
 
 extension DatabaseTable: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case shouldShow
-        case databaseID
-    }
-    
     static let databaseForeignKey = ForeignKey(["databaseID"])
     static let database = belongsTo(Database.self, using: databaseForeignKey)
     
@@ -401,8 +417,8 @@ extension DatabaseColumn: Codable, TableRecord, FetchableRecord, MutablePersista
     static let tableForeignKey = ForeignKey(["tableID"])
     static let table = belongsTo(DatabaseTable.self, using: tableForeignKey)
     
-    static let associatedTableForeignKey = ForeignKey(["associatedTableID"])
-    static let associatedTable = hasOne(DatabaseTable.self, using: associatedTableForeignKey)
+    static let referencedTableForeignKey = ForeignKey(["referencedTableID"])
+    static let referencedTable = hasOne(DatabaseTable.self, using: referencedTableForeignKey)
     
     enum Columns {
         static let name = Column(CodingKeys.name)
@@ -411,19 +427,23 @@ extension DatabaseColumn: Codable, TableRecord, FetchableRecord, MutablePersista
     }
 }
 
-extension DatabaseRow: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    static let tableForeignKey = ForeignKey(["tableID"])
-    static let table = belongsTo(DatabaseTable.self, using: tableForeignKey)
+extension DatabaseRow: Codable, FetchableRecord {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case tableID
+    }
     
-    // TODO: does this need to have a different using to look up by DatabaseColumn ID?
-    static let columns = hasMany(DatabaseEntry.self, using: DatabaseEntry.rowForeignKey)
-}
-
-extension DatabaseEntry: Codable, TableRecord, FetchableRecord, MutablePersistableRecord {
-    static let rowForeignKey = ForeignKey(["rowID"])
-    static let row = belongsTo(DatabaseRow.self, using: rowForeignKey)
-    
-    enum Columns {
-        static let value = Column(CodingKeys.value)
+    init(from decoder: Decoder) throws {
+        // https://www.hackingwithswift.com/articles/119/codable-cheat-sheet
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(DatabaseRow.ID.self, forKey: .id)
+        tableID = try container.decode(DatabaseTable.ID.self, forKey: .tableID)
+        if let table = SchemaDatabase.used.table(id: tableID) {
+            let database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+            self.values = database.row(rowID: id, tableID: tableID)?.values ?? [:]
+        }
+        else {
+            values = [:]
+        }
     }
 }

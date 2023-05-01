@@ -99,12 +99,12 @@ extension AppModel: DatabasesSaver {
             for database in self.databases {
                 // if the new version also has it, update it
                 if let updated = databases[id: database.id] {
-                    try? SchemaDatabase.shared.updateDatabase(updated)
+                    SchemaDatabase.used.updateDatabase(updated)
                     self.databases[id: updated.id] = updated
                 }
                 // otherwise, remove it
                 else {
-                    try? SchemaDatabase.shared.removeDatabase(database)
+                    SchemaDatabase.used.removeDatabase(database)
                     self.databases.remove(database)
                 }
                 // remove this database from the draft so we can know anything that remains was added
@@ -112,7 +112,7 @@ extension AppModel: DatabasesSaver {
             }
             // add everything that's new
             for database in draftDatabases {
-                try? SchemaDatabase.shared.addDatabase(database)
+                SchemaDatabase.used.addDatabase(database)
             }
             self.databases += draftDatabases
         }
@@ -138,7 +138,6 @@ final class EditDatabasesModel: ViewModel {
     }
         
     override func editButtonPressed() {
-        // TODO: figure out to use transactions for the edit/cancel button or else make the cancel button work again https://swiftpackageindex.com/groue/grdb.swift/v6.11.0/documentation/grdb/transactions
         if isEditing {
             // we may have changed multiple databases, so we're responsible for updating the SchemaDatabase
             parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: true)

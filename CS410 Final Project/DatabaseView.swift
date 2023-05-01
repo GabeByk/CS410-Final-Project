@@ -18,7 +18,7 @@ extension EditDatabasesModel: DatabaseSaver {
     func updateDatabase(database: Database) {
         self.draftDatabases[id: database.id] = database
         // we may need to update the database (e.g. the name might have changed)
-        try? SchemaDatabase.shared.updateDatabase(database)
+        SchemaDatabase.used.updateDatabase(database)
         // we updated the database, so the parentModel doesn't need to
         parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: false)
     }
@@ -47,18 +47,18 @@ final class EditDatabaseModel: ViewModel {
             for table in database.tables {
                 // if we both have a table of this id, update the database to have our version
                 if let updatedTable = tables[id: table.id] {
-                    try? SchemaDatabase.shared.updateTable(updatedTable)
+                    SchemaDatabase.used.updateTable(updatedTable)
                     // removing this means that the only values in tables after this loop ends are those that the user added to the database during this edit
                     tables.remove(updatedTable)
                 }
                 // if the database has it and we don't, remove it from the database
                 else {
-                    try? SchemaDatabase.shared.removeTable(table)
+                    SchemaDatabase.used.removeTable(table)
                 }
             }
             // anything left in tables at this point must have been added, so add it to the database
             for table in tables {
-                try? SchemaDatabase.shared.addTable(table)
+                SchemaDatabase.used.addTable(table)
             }
             parentModel?.updateDatabase(database: database)
             if parentModel == nil {
@@ -81,6 +81,16 @@ final class EditDatabaseModel: ViewModel {
     
     func removeTables(at offsets: IndexSet) {
         tables.remove(atOffsets: offsets)
+    }
+    
+    /// - returns: true if there are no unhidden tables, false otherwise
+    func allTablesHidden() -> Bool {
+        for table in database.tables {
+            if table.shouldShow {
+                return false
+            }
+        }
+        return true
     }
 }
 
@@ -108,7 +118,7 @@ struct EditDatabase: View {
                         Button {
                             table.shouldShow.toggle()
                         } label: {
-                            DatabaseTable.shouldShowImage(shouldShow: table.shouldShow)
+                            table.shouldShowImage
                         }
                     }
                 }
@@ -140,7 +150,9 @@ struct EditDatabase: View {
                 if model.database.tables.count == 0 {
                     Text("Try adding some tables in the edit view!")
                 }
-                // TODO: show a little helper telling the user all their tables are hidden and they'll need to enter the edit view to show them again
+                else if model.allTablesHidden() {
+                    Text("All of your tables are hidden. You can show them again by clicking the Edit button.")
+                }
             }
         }
     }

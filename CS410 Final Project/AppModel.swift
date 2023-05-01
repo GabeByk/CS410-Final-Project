@@ -12,6 +12,7 @@ enum NavigationPathCase: Equatable, Hashable {
     case database(EditDatabaseModel)
     case table(EditDatabaseTableModel)
     case column(EditColumnModel)
+    case row(EditRowModel)
 }
 
 @MainActor
@@ -24,7 +25,7 @@ class AppModel: ObservableObject {
             self.databases = databases
         }
         else {
-            self.databases = (try? SchemaDatabase.shared.allDatabases()) ?? []
+            self.databases = SchemaDatabase.used.allDatabases()
         }
         
         self.navigationPath = navigationPath

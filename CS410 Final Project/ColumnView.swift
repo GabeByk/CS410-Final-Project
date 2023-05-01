@@ -16,7 +16,7 @@ protocol ColumnSaver: AnyObject {
 extension EditColumnsModel: ColumnSaver {
     func updateColumn(_ column: DatabaseColumn) {
         columns[id: column.id] = column
-        try? SchemaDatabase.shared.updateColumn(column)
+        SchemaDatabase.used.updateColumn(column)
         parentModel?.updateTable(table)
     }
     
@@ -38,25 +38,25 @@ final class EditColumnModel: ViewModel {
             switch selected {
             case ValueType.string.rawValue:
                 draftColumn.type = .string
-                draftColumn.associatedTableID = nil
+                draftColumn.referencedTableID = nil
             case ValueType.int.rawValue:
                 draftColumn.type = .int
-                draftColumn.associatedTableID = nil
+                draftColumn.referencedTableID = nil
             case ValueType.double.rawValue:
                 draftColumn.type = .double
-                draftColumn.associatedTableID = nil
+                draftColumn.referencedTableID = nil
             case ValueType.bool.rawValue:
                 draftColumn.type = .bool
-                draftColumn.associatedTableID = nil
+                draftColumn.referencedTableID = nil
             case ValueType.table.rawValue:
                 // https://developer.apple.com/documentation/foundation/uuid/3126814-init
                 if let id = DatabaseTable.ID(uuidString: selectedTable) {
                     draftColumn.type = .table
-                    draftColumn.associatedTableID = id
+                    draftColumn.referencedTableID = id
                 }
                 else {
                     draftColumn.type = .table
-                    draftColumn.associatedTableID = nil
+                    draftColumn.referencedTableID = nil
                 }
             default:
                 break
@@ -68,10 +68,10 @@ final class EditColumnModel: ViewModel {
         didSet {
             if let id = DatabaseTable.ID(uuidString: selectedTable) {
                 draftColumn.type = .table
-                draftColumn.associatedTableID = id
+                draftColumn.referencedTableID = id
             }
             else {
-                draftColumn.associatedTableID = nil
+                draftColumn.referencedTableID = nil
             }
         }
     }
@@ -80,10 +80,10 @@ final class EditColumnModel: ViewModel {
         self.parentModel = parentModel
         self.column = column
         self.draftColumn = column
-        self.selectedType = column.valueType
+        self.selectedType = column.type.rawValue
         self.types = [ValueType.string.rawValue, ValueType.int.rawValue, ValueType.double.rawValue, ValueType.bool.rawValue, ValueType.table.rawValue]
         super.init(isEditing: isEditing)
-        if let table = associatedTable {
+        if let table = referencedTable {
             self.selectedTable = table.id.uuidString
         }
         else {
@@ -92,20 +92,22 @@ final class EditColumnModel: ViewModel {
     }
     
     var tables: [String] {
-        let tables = (try? SchemaDatabase.shared.allTables()) ?? []
         var ids: [String] = ["None"]
-        for table in tables {
-            ids.append(table.id.uuidString)
+        if let table = SchemaDatabase.used.table(id: column.tableID) {
+            let tables = SchemaDatabase.used.tablesFor(databaseID: table.databaseID)
+            for table in tables {
+                ids.append(table.id.uuidString)
+            }
         }
         return ids
     }
 
     let types: [String]
     
-    var associatedTable: DatabaseTable? {
+    var referencedTable: DatabaseTable? {
         switch column.type {
         case .table:
-            if let id = column.associatedTableID {
+            if let id = column.referencedTableID {
                 return parentModel?.tableFor(id: id)
             }
             else {
@@ -123,8 +125,8 @@ final class EditColumnModel: ViewModel {
         }
         else {
             draftColumn = column
-            selectedType = column.valueType
-            if let table = associatedTable {
+            selectedType = column.type.rawValue
+            if let table = referencedTable {
                 selectedTable = table.id.uuidString
             }
             else {
@@ -151,7 +153,7 @@ struct EditColumn: View {
                     Button() {
                         model.draftColumn.isPrimary.toggle()
                     } label: {
-                        DatabaseColumn.primaryKeyImage(isPrimary: model.draftColumn.isPrimary)
+                        model.draftColumn.primaryKeyImage
                     }
                     .tint(.red)
                 }
@@ -170,7 +172,7 @@ struct EditColumn: View {
                         Text("No Tables")
                     }
                     else {
-                        // TODO: picker view that you can scroll through
+                        // TODO: have this come in on a sheet when a button is pressed so the picker is fullscreen?
                         Picker("Table:", selection: $model.selectedTable) {
                             ForEach(model.tables, id:\.self) { rowID in
                                 if let id = DatabaseTable.ID(uuidString: rowID) {
@@ -181,6 +183,7 @@ struct EditColumn: View {
                                 }
                             }
                         }
+                        .pickerStyle(.wheel)
                     }
                 }
             }
@@ -193,12 +196,12 @@ struct EditColumn: View {
                 HStack {
                     Text(model.column.name)
                     Spacer()
-                    DatabaseColumn.primaryKeyImage(isPrimary: model.column.isPrimary)
+                    model.column.primaryKeyImage
                         .foregroundColor(.red)
                 }
             }
             Section("Data Type") {
-                Text(model.column.valueType == ValueType.table.rawValue ? model.associatedTable?.name ?? "Table not chosen" : model.column.valueType)
+                Text(model.column.valueType)
             }
         }
     }

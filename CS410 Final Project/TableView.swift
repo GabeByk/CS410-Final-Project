@@ -22,7 +22,7 @@ protocol DatabaseTableSaver: AnyObject {
 extension EditDatabaseModel: DatabaseTableSaver {
     func updateTable(table: DatabaseTable) {
         tables[id: table.id] = table
-        try? SchemaDatabase.shared.updateTable(table)
+        SchemaDatabase.used.updateTable(table)
         parentModel?.updateDatabase(database: database)
     }
     

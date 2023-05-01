@@ -30,6 +30,8 @@ func navigateTo(item: NavigationPathCase) -> some View {
         return AnyView(EditTable(model: model))
     case let .column(model):
         return AnyView(EditColumn(model: model))
+    case let .row(model):
+        return AnyView(RowView(model: model))
     }
 }
 

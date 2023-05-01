@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		000104C629D6520800316B3A /* TableRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000104C529D6520800316B3A /* TableRowView.swift */; };
+		000104C629D6520800316B3A /* RowsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000104C529D6520800316B3A /* RowsView.swift */; };
 		000104C829D6528600316B3A /* ColumnsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000104C729D6528600316B3A /* ColumnsView.swift */; };
 		00203CE429C8F68A00AC0240 /* CS410_Final_ProjectApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */; };
 		00203CE629C8F68A00AC0240 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00203CE529C8F68A00AC0240 /* ContentView.swift */; };
@@ -23,10 +23,11 @@
 		0047A68229CE63E9005E76EE /* ColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0047A68129CE63E9005E76EE /* ColumnView.swift */; };
 		004B127429E44C4900AEBCE2 /* GRDBDatabases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */; };
 		0080483229CA5A5F0074EAA0 /* TableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0080483129CA5A5F0074EAA0 /* TableView.swift */; };
+		00A565BF29F1FA9C005B8D8A /* RowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A565BE29F1FA9C005B8D8A /* RowView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		000104C529D6520800316B3A /* TableRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableRowView.swift; sourceTree = "<group>"; };
+		000104C529D6520800316B3A /* RowsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowsView.swift; sourceTree = "<group>"; };
 		000104C729D6528600316B3A /* ColumnsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnsView.swift; sourceTree = "<group>"; };
 		00203CE029C8F68A00AC0240 /* CS410 Final Project.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CS410 Final Project.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CS410_Final_ProjectApp.swift; sourceTree = "<group>"; };
@@ -40,6 +41,7 @@
 		0047A68129CE63E9005E76EE /* ColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnView.swift; sourceTree = "<group>"; };
 		004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GRDBDatabases.swift; sourceTree = "<group>"; };
 		0080483129CA5A5F0074EAA0 /* TableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableView.swift; sourceTree = "<group>"; };
+		00A565BE29F1FA9C005B8D8A /* RowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,19 +77,20 @@
 		00203CE229C8F68A00AC0240 /* CS410 Final Project */ = {
 			isa = PBXGroup;
 			children = (
-				00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */,
-				00203CE529C8F68A00AC0240 /* ContentView.swift */,
 				00203CE729C8F68C00AC0240 /* Assets.xcassets */,
 				00203CE929C8F68C00AC0240 /* Preview Content */,
 				00348C1829CA00EB00B3E4B2 /* AppModel.swift */,
-				00348C1A29CA01A400B3E4B2 /* DataModels.swift */,
-				00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */,
-				00348C2429CA16A300B3E4B2 /* DatabaseView.swift */,
-				0080483129CA5A5F0074EAA0 /* TableView.swift */,
 				0047A68129CE63E9005E76EE /* ColumnView.swift */,
 				000104C729D6528600316B3A /* ColumnsView.swift */,
-				000104C529D6520800316B3A /* TableRowView.swift */,
+				00203CE529C8F68A00AC0240 /* ContentView.swift */,
+				00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */,
+				00348C2429CA16A300B3E4B2 /* DatabaseView.swift */,
+				00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */,
+				00348C1A29CA01A400B3E4B2 /* DataModels.swift */,
 				004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */,
+				00A565BE29F1FA9C005B8D8A /* RowView.swift */,
+				000104C529D6520800316B3A /* RowsView.swift */,
+				0080483129CA5A5F0074EAA0 /* TableView.swift */,
 			);
 			path = "CS410 Final Project";
 			sourceTree = "<group>";
@@ -187,8 +190,9 @@
 				00348C1B29CA01A400B3E4B2 /* DataModels.swift in Sources */,
 				0080483229CA5A5F0074EAA0 /* TableView.swift in Sources */,
 				004B127429E44C4900AEBCE2 /* GRDBDatabases.swift in Sources */,
+				00A565BF29F1FA9C005B8D8A /* RowView.swift in Sources */,
 				0047A68229CE63E9005E76EE /* ColumnView.swift in Sources */,
-				000104C629D6520800316B3A /* TableRowView.swift in Sources */,
+				000104C629D6520800316B3A /* RowsView.swift in Sources */,
 				00203CE429C8F68A00AC0240 /* CS410_Final_ProjectApp.swift in Sources */,
 				00348C2329CA0A4600B3E4B2 /* DatabasesView.swift in Sources */,
 			);

@@ -52,18 +52,18 @@ final class EditColumnsModel: ViewModel {
             for column in table.columns {
                 // if we both have a column with this id, update the database with the data for our version
                 if let updatedColumn = columns[id: column.id] {
-                    try? SchemaDatabase.shared.updateColumn(updatedColumn)
+                    SchemaDatabase.used.updateColumn(updatedColumn)
                     // remove the column from our version so we know anything left in it was added by the user
                     columns.remove(updatedColumn)
                 }
                 // if the database has it but we don't, it should be removed
                 else {
-                    try? SchemaDatabase.shared.removeColumn(column)
+                    SchemaDatabase.used.removeColumn(column)
                 }
             }
             // any columns now left in columns were added to the database, but not in the list yet
             for column in columns {
-                try? SchemaDatabase.shared.addColumn(column)
+                SchemaDatabase.used.addColumn(column)
             }
             parentModel?.updateTable(table)
         }
@@ -109,7 +109,7 @@ struct EditColumnsView: View {
                     Button {
                         model.table.shouldShow.toggle()
                     } label: {
-                        DatabaseTable.shouldShowImage(shouldShow: model.table.shouldShow)
+                        model.table.shouldShowImage
                     }
                 }
             }
@@ -122,8 +122,7 @@ struct EditColumnsView: View {
                             column.isPrimary.toggle()
                         } label: {
                             // TODO?: have a pop-up tutorial type thing about what a primary key is, etc
-                            // TODO: column.primaryKeyImage?
-                            DatabaseColumn.primaryKeyImage(isPrimary: column.isPrimary)
+                            column.primaryKeyImage
                         }
                         .buttonStyle(.borderless)
                         .tint(.red)
@@ -148,7 +147,7 @@ struct EditColumnsView: View {
                     HStack {
                         Text(model.table.name)
                         Spacer()
-                        DatabaseTable.shouldShowImage(shouldShow: model.table.shouldShow)
+                        model.table.shouldShowImage
                     }
                 }
                 Section("Columns") {
@@ -157,7 +156,7 @@ struct EditColumnsView: View {
                             HStack {
                                 Text(column.name)
                                 Spacer()
-                                DatabaseColumn.primaryKeyImage(isPrimary: column.isPrimary)
+                                column.primaryKeyImage
                                     .foregroundColor(.red)
                             }
                         }

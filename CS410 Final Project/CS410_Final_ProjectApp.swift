@@ -19,10 +19,18 @@ struct CS410_Final_ProjectApp: App {
                 .onChange(of: scenePhase) { phase in
                 switch phase {
                 case .background:
-                    // print the database, table, and column tables each time we go in the background
-                    print(String(describing: try? SchemaDatabase.shared.allDatabases()))
-                    print(String(describing: try? SchemaDatabase.shared.allTables()))
-                    print(String(describing: try? SchemaDatabase.shared.allColumns()))
+                    // print the database, table, and column tables each time we go in the background for debugging
+                    let dbs = SchemaDatabase.used.allDatabases()
+                    print(String(describing: dbs))
+                    for db in dbs {
+                        let discDB = DataDatabase.discDatabaseFor(databaseID: db.id)
+                        print(String(describing: discDB))
+                        for table in db.tables {
+                            print("table \(table.id): \(String(describing: discDB.rowsFor(table: table)))")
+                        }
+                    }
+                    print(String(describing: SchemaDatabase.used.allTables()))
+                    print(String(describing: SchemaDatabase.used.allColumns()))
                 default:
                     break
                 }
