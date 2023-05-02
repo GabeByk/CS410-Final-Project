@@ -449,10 +449,6 @@ struct DataDatabase {
         return rows
     }
     
-    func row(rowID: DatabaseRow.ID) -> DatabaseRow? {
-        return allRows()[id: rowID]
-    }
-    
     func row(rowID: DatabaseRow.ID, tableID: DatabaseTable.ID) -> DatabaseRow? {
         var row = DatabaseRow(id: rowID, tableID: tableID)
         do {

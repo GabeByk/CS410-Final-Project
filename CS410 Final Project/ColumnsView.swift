@@ -30,8 +30,7 @@ extension EditDatabaseTableModel: ColumnsSaver {
 }
 
 final class EditColumnsModel: ViewModel {
-    #warning("EditColumnsModel parentModel isn't weak")
-    var parentModel: ColumnsSaver?
+    weak var parentModel: ColumnsSaver?
     @Published var table: DatabaseTable
     @Published var columns: IdentifiedArrayOf<DatabaseColumn>
     
@@ -73,14 +72,16 @@ final class EditColumnsModel: ViewModel {
     }
     
     override func cancelButtonPressed() {
+        if let table = SchemaDatabase.used.table(id: self.table.id) {
+            self.table.name = table.name
+            self.table.shouldShow = table.shouldShow
+        }
         isEditing = false
     }
     
     func addColumn() {
         let column: DatabaseColumn = .empty(tableID: table.id)
         columns.append(column)
-        // all addColumn does is propogate the added column to each row, but we would want to do this in the editButtonPressed method so it's cancellable
-//        table.addColumn(column)
     }
     
     func removeColumns(at offsets: IndexSet) {
@@ -149,6 +150,12 @@ struct EditColumnsView: View {
                         Spacer()
                         model.table.shouldShowImage
                     }
+                    // the button shouldn't be at the bottom of the screen
+                    // https://stackoverflow.com/questions/74407838/why-am-i-getting-this-systemgesturegate-0x102210320-gesture-system-gesture
+                    Button("View Rows") {
+                        // TODO: this button takes a while
+                        model.viewTablePressed()
+                    }
                 }
                 Section("Columns") {
                     ForEach(model.table.columns) { column in
@@ -165,9 +172,7 @@ struct EditColumnsView: View {
                         Text("Try adding some columns in the edit view!")
                     }
                 }
-            }
-            Button("View as Table") {
-                model.viewTablePressed()
+
             }
         }
     }

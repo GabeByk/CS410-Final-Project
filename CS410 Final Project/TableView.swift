@@ -33,8 +33,8 @@ extension EditDatabaseModel: DatabaseTableSaver {
 
 @MainActor
 final class EditDatabaseTableModel: ObservableObject {
-    #warning("EditDatabaseTableModel parentModel isn't weak")
-    var parentModel: DatabaseTableSaver?
+    // this being weak doesn't seem to break anything
+    weak var parentModel: DatabaseTableSaver?
     @Published var table: DatabaseTable
     @Published var state: EditTableViewState
     

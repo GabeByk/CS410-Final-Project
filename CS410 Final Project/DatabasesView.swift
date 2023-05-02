@@ -18,9 +18,11 @@ class ViewModel: ObservableObject {
     
     // needed for ModelDrivenView
     @Published var isEditing: Bool
+    
     func cancelButtonPressed() {
         print("Cancel")
     }
+    
     func editButtonPressed() {
         print("Edit")
     }
@@ -124,7 +126,7 @@ extension AppModel: DatabasesSaver {
 
 @MainActor
 final class EditDatabasesModel: ViewModel {
-    weak var parentModel: (any DatabasesSaver)?
+    weak var parentModel: DatabasesSaver?
     @Published var draftDatabases: IdentifiedArrayOf<Database>
     
     var databases: IdentifiedArrayOf<Database> {

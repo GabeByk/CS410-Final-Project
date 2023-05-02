@@ -194,7 +194,7 @@ extension StoredValue: CustomStringConvertible {
                     let row = database.row(rowID: referencedRowID, tableID: referencedTableID)
                     return row?.nonRecursiveDescription ?? "NULL"
                 }
-                return "UUID: \(referencedRowID.uuidString)"
+                return "Holds UUID: \(referencedRowID.uuidString)"
             }
         }
         return "NULL"
@@ -212,7 +212,7 @@ extension StoredValue: CustomStringConvertible {
             return d == nil ? "NULL" : String(d!)
         case let .row(referencedRowID, _):
             if let referencedRowID {
-                return "UUID: \(referencedRowID.uuidString)"
+                return "Holds UUID: \(referencedRowID.uuidString)"
             }
         }
         return "NULL"
@@ -338,7 +338,7 @@ extension DatabaseRow: CustomStringConvertible {
             let primaryKey = table.primaryKey()
             switch primaryKey {
             case .id(_):
-                return "UUID: " + id.uuidString
+                return "Has UUID: " + id.uuidString
             case let .column(column):
                 if let value = valueFor(columnID: column.id) {
                     return value.description
@@ -347,11 +347,14 @@ extension DatabaseRow: CustomStringConvertible {
                     return "\(column.name): NULL"
                 }
             case let .columns(columns):
-                var keyValues: String = ""
+                var keyValues: String = "("
                 for column in columns {
                     keyValues += (column.name + ": " + (values[column.id]?.description ?? "NULL"))
                     if column != columns.last {
                         keyValues += ", "
+                    }
+                    else {
+                        keyValues += ")"
                     }
                 }
                 return keyValues
@@ -367,7 +370,7 @@ extension DatabaseRow: CustomStringConvertible {
             let primaryKey = table.primaryKey()
             switch primaryKey {
             case .id(_):
-                return "UUID: " + id.uuidString
+                return "Holds UUID: " + id.uuidString
             case let .column(column):
                 if let value = valueFor(columnID: column.id) {
                     return value.nonRecursiveDescription
@@ -376,11 +379,14 @@ extension DatabaseRow: CustomStringConvertible {
                     return "\(column.name): NULL"
                 }
             case let .columns(columns):
-                var keyValues: String = ""
+                var keyValues: String = "("
                 for column in columns {
                     keyValues += (column.name + ": " + (values[column.id]?.nonRecursiveDescription ?? "NULL"))
                     if column != columns.last {
                         keyValues += ", "
+                    }
+                    else {
+                        keyValues += ")"
                     }
                 }
                 return keyValues

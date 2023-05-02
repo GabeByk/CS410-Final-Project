@@ -20,8 +20,7 @@ extension EditTableModel: RowSaver {
 
 @MainActor
 final class EditRowModel: ViewModel {
-    #warning("EditRowModel ParentModel isn't weak")
-    var parentModel: RowSaver?
+    weak var parentModel: RowSaver?
     @Published var row: DatabaseRow
     @Published var values: IdentifiedArrayOf<ColumnValue>
     var rowsByDescription: [String : DatabaseRow.ID]
@@ -32,13 +31,13 @@ final class EditRowModel: ViewModel {
         self.values = []
         self.rowsByDescription = [:]
         super.init(isEditing: isEditing)
-        refreshValues()
+        refreshValues(generatePickerOptions: isEditing)
     }
     
-    func refreshValues() {
+    func refreshValues(generatePickerOptions: Bool = true) {
         self.values = []
         self.rowsByDescription = [:]
-        // iterate over the columns in the schema database instead of row.values so they appear in the same order
+        // iterate over the columns in the schema database instead of row.values so they appear in the same order every time
         for column in SchemaDatabase.used.columnsFor(tableID: row.tableID) {
             if let storedValue = row.valueFor(columnID: column.id) {
                 switch storedValue {
@@ -46,39 +45,53 @@ final class EditRowModel: ViewModel {
                     // validValues should be an array of uuidStrings for each row in the referenced table
                     var validValues: [String] = []
                     var defaultValue: String? = nil
-                    // if we were given a table ID
-                    if let referencedTableID {
-                        // and the table exists
-                        if let schemaTable = SchemaDatabase.used.table(id: referencedTableID) {
-                            // get the database on disc that matches this table
-                            let database = DataDatabase.discDatabaseFor(databaseID: schemaTable.databaseID)
-                            // get the rows for the table
-                            let rows = database.rowsFor(table: schemaTable)
-                            for row in rows {
-                                // we need to give each row a unique string so we can figure out which one the user chose
-                                // if it isn't already in here, just use the description based on the primary key
-                                if !validValues.contains(row.description) {
-                                    validValues.append(row.description)
-                                    rowsByDescription[row.description] = row.id
-                                }
-                                // if there are multiple items with the same primary key, we need some more information
-                                else {
-                                    // count how many times we have a row with this data
-                                    var count = 0
-                                    for validValue in validValues {
-                                        // if we already have something like Jane Smith (1), we want to get rid of the (1) we added, but not "Smith"
-                                        if validValue == row.description || validValue.split(separator: " ").dropLast().joined(separator: " ") == row.description {
-                                            count += 1
-                                        }
+                    if generatePickerOptions {
+                        // if we were given a table ID
+                        if let referencedTableID {
+                            // and the table exists
+                            if let schemaTable = SchemaDatabase.used.table(id: referencedTableID) {
+                                // get the database on disc that matches this table
+                                let database = DataDatabase.discDatabaseFor(databaseID: schemaTable.databaseID)
+                                // get the rows for the table
+                                let rows = database.rowsFor(table: schemaTable)
+                                for row in rows {
+                                    // only fetch the description once
+                                    let description = row.description
+                                    // we need to give each row a unique string so we can figure out which one the user chose
+                                    // if it isn't already in here, just use the description based on the primary key
+                                    if !validValues.contains(description) {
+                                        validValues.append(description)
+                                        rowsByDescription[description] = row.id
                                     }
-                                    validValues.append("\(row.description) (\(count))")
-                                    rowsByDescription[validValues.last!] = row.id
-                                }
-                                if row.id == referencedRowID {
-                                    defaultValue = validValues.last
+                                    // if there are multiple items with the same primary key, we need some more information
+                                    else {
+                                        // count how many times we have a row with this data
+                                        var count = 0
+                                        for validValue in validValues {
+                                            // if we already have something like Jane Smith (1), we want to get rid of the (1) we added, but not "Smith"
+                                            if validValue == row.description || validValue.split(separator: " ").dropLast().joined(separator: " ") == row.description {
+                                                count += 1
+                                            }
+                                        }
+                                        validValues.append("\(row.description) (\(count))")
+                                        rowsByDescription[validValues.last!] = row.id
+                                    }
+                                    if row.id == referencedRowID {
+                                        defaultValue = validValues.last
+                                    }
                                 }
                             }
                         }
+                    }
+                    else {
+                        validValues = ["NULL"]
+                        if let referencedRowID, let referencedTableID {
+                            if let table = SchemaDatabase.used.table(id: referencedTableID) {
+                                let database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                                validValues = [database.row(rowID: referencedRowID, tableID: referencedTableID)?.description ?? "NULL"]
+                            }
+                        }
+                        defaultValue = validValues.first!
                     }
                     // if we have no rows, tell the user there aren't any
                     if validValues.count == 0 {
@@ -89,7 +102,7 @@ final class EditRowModel: ViewModel {
                 case .int(let i):
                     self.values.append(ColumnValue(columnID: column.id, value: i, type: .textField))
                 case .string(let s):
-                    self.values.append(ColumnValue(columnID: column.id, value: s, type: .textField))
+                    self.values.append(ColumnValue(columnID: column.id, value: s, type: .textEditor))
                 case .bool(let b):
                     self.values.append(ColumnValue(columnID: column.id, value: b == nil ? nil : (b! ? "True" : "False"), type: .picker(["True", "False"])))
                 case .double(let d):
@@ -151,9 +164,11 @@ final class EditRowModel: ViewModel {
                 discDatabase.updateRow(row)
             }
             parentModel?.updateRow(row)
-            refreshValues()
         }
         isEditing.toggle()
+        // if we exited editing (isEditing = false), we only want the currently selected options
+        // if we're entering editing (isEditing = true), we need all the data for the pickers
+        refreshValues(generatePickerOptions: isEditing)
     }
     
     override func cancelButtonPressed() {
@@ -169,6 +184,7 @@ final class EditRowModel: ViewModel {
 // what to use to get data from the user
 enum ColumnType {
     case textField
+    case textEditor
     // the array of strings is the values to choose from in the picker
     case picker([String])
 }
@@ -186,12 +202,12 @@ class ColumnValue: ObservableObject, Identifiable {
         self.id = columnID
         self.isNull = value == nil
         switch type {
-        // default the entered value for a text field to be empty
-        case .textField:
-            self.value = value?.description ?? ""
         // default the chosen option for a picker to the first chosen value, or empty if there isn't a first value
         case let .picker(values):
             self.value = value?.description ?? values.first ?? ""
+        // default the entered value for a text field to be empty
+        case .textField, .textEditor:
+            self.value = value?.description ?? ""
         }
         self.type = type
     }
@@ -275,7 +291,11 @@ struct EditableColumnValueView: View {
                             }
                         }
                     case .textField:
-                        TextField("Enter a value", text: $columnValue.value)
+                        // https://www.hackingwithswift.com/quick-start/swiftui/how-to-make-a-textfield-expand-vertically-as-the-user-types
+                        TextField("Enter a value", text: $columnValue.value, axis: .vertical)
+                    case .textEditor:
+                        // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-multi-line-editable-text-with-texteditor
+                        TextEditor(text: $columnValue.value)
                     }
                 }
             }

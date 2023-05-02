@@ -26,8 +26,7 @@ extension EditDatabasesModel: DatabaseSaver {
 
 @MainActor
 final class EditDatabaseModel: ViewModel {
-    // when parentModel isn't weak, the one passed in seems to be lost?
-    #warning("EditDatabaseModel parentModel isn't weak")
+    // if this is weak, changes to the name of the database aren't propogated or saved
     var parentModel: DatabaseSaver?
     @Published var database: Database
     // we need to store a local copy of all the tables so the user can rename a table from this view
@@ -61,9 +60,6 @@ final class EditDatabaseModel: ViewModel {
                 SchemaDatabase.used.addTable(table)
             }
             parentModel?.updateDatabase(database: database)
-            if parentModel == nil {
-                print("No parentModel to save changes")
-            }
         }
         // I would think that I only need to set this when entering edit mode, but for some reason not setting it when exiting edit mode causes a crash when renaming an empty table. Similarly, adding this line to cancelButtonPressed causes a crash when cancelling adding a table with a non-empty name.
         self.tables = database.tables
@@ -71,6 +67,11 @@ final class EditDatabaseModel: ViewModel {
     }
     
     override func cancelButtonPressed() {
+        // TODO: runtime warning sometimes appears when reverting changes to tables: [SwiftUI] Publishing changes from within view updates is not allowed, this will cause undefined behavior.
+        // discard the changes by fetching the data stored on disc
+        if let database = SchemaDatabase.used.database(id: self.database.id) {
+            self.database.name = database.name
+        }
         isEditing = false
     }
     

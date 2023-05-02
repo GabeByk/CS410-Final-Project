@@ -28,8 +28,7 @@ extension EditColumnsModel: ColumnSaver {
 @MainActor
 final class EditColumnModel: ViewModel {
 
-    #warning("EditColumnModel parentModel isn't weak")
-    var parentModel: ColumnSaver?
+    weak var parentModel: ColumnSaver?
     @Published var column: DatabaseColumn
     @Published var draftColumn: DatabaseColumn
     @Published var selectedType: String {

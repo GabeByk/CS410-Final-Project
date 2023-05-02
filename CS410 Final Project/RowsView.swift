@@ -21,7 +21,7 @@ extension EditDatabaseTableModel: RowsSaver {
 }
 
 final class EditTableModel: ViewModel {
-    var parentModel: RowsSaver?
+    weak var parentModel: RowsSaver?
     @Published var table: DatabaseTable
     @Published var rows: IdentifiedArrayOf<DatabaseRow>
     var database: DataDatabase
@@ -76,7 +76,6 @@ final class EditTableModel: ViewModel {
 }
 
 struct EditTableView: View {
-    #warning("EditTableModel parentModel isn't weak")
     @ObservedObject var model: EditTableModel
     var body: some View {
         ModelDrivenView(model: model) {
@@ -115,6 +114,9 @@ struct EditTableView: View {
             List {
                 Section("Table") {
                     Text("\(model.table.name)")
+                    Button("View Columns") {
+                        model.viewColumnsPressed()
+                    }
                 }
                 Section("Rows") {
                     ForEach(model.rows) { row in
@@ -126,9 +128,6 @@ struct EditTableView: View {
                         Text("Try adding some rows in the edit menu!")
                     }
                 }
-            }
-            Button("View Columns") {
-                model.viewColumnsPressed()
             }
         }
     }
