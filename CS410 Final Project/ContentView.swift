@@ -22,16 +22,41 @@ struct ContentView: View {
     }
 }
 
-func navigateTo(item: NavigationPathCase) -> some View {
+// wrote this as a separate function so previews can use it
+func navigateTo(item: NavigationPathCase) -> NavigatableView {
     switch item {
     case let .database(model):
-        return AnyView(EditDatabase(model: model))
+        return .database(EditDatabase(model: model))
     case let .table(model):
-        return AnyView(EditTable(model: model))
+        return .table(EditTable(model: model))
     case let .column(model):
-        return AnyView(EditColumn(model: model))
+        return .column(EditColumn(model: model))
     case let .row(model):
-        return AnyView(RowView(model: model))
+        return .row(EditRow(model: model))
+    }
+}
+
+// this exists purely so navigateTo can be a separate function with a nice return type
+enum NavigatableView {
+    case database(EditDatabase)
+    case table(EditTable)
+    case column(EditColumn)
+    case row(EditRow)
+}
+
+// this is so it counts as a view and people using it don't have to write this switch code every time
+extension NavigatableView: View {
+    var body: some View {
+        switch self {
+        case let .database(d):
+            d
+        case let .table(t):
+            t
+        case let .column(c):
+            c
+        case let .row(r):
+            r
+        }
     }
 }
 

@@ -8,16 +8,14 @@
 import Foundation
 import IdentifiedCollections
 import Tagged
+import GRDB
 // used for the DatabaseTable and DatabaseColumn's static properties for their images
 import SwiftUI
-import GRDB
 
 struct Database: Identifiable {
-    public private(set) var id: Tagged<Self, UUID>
+    var id: Tagged<Self, UUID>
+    
     var name: String
-    var tables: IdentifiedArrayOf<DatabaseTable> {
-        return SchemaDatabase.used.tablesFor(databaseID: id)
-    }
     
     init(name: String, id: Database.ID? = nil) {
         self.name = name
@@ -31,14 +29,8 @@ struct Database: Identifiable {
 }
 
 extension Database {
-    static let mockID: Self.ID = Self.ID(UUID())
-    
     static var empty: Database {
         return Database(name: "")
-    }
-    
-    static var mockDatabase: Database {
-        return Database(name: "Database A", id: Database.mockID)
     }
 }
 
@@ -52,24 +44,21 @@ extension Database: Equatable, Hashable {
 
 struct DatabaseTable: Identifiable, Equatable, Hashable{
     // while the primary key should identify it, we want our own ID in case the user wants to change the primary key later
-    public private(set) var id: Tagged<Self, UUID>
-    // which database this belongs to
-    var databaseID: Database.ID
+    var id: Tagged<Self, UUID>
     
-    enum PrimaryKey: Equatable, Hashable {
-        case id(DatabaseTable.ID)
-        case column(DatabaseColumn)
-        case columns([DatabaseColumn])
-    }
+    // which database this table belongs to
+    var databaseID: Database.ID
     
     var name: String
     
-    var rows: IdentifiedArrayOf<DatabaseRow> {
-        return DataDatabase.discDatabaseFor(databaseID: databaseID).rowsFor(table: self)
-    }
-    
-    var columns: IdentifiedArrayOf<DatabaseColumn> {
-        return SchemaDatabase.used.columnsFor(tableID: id)
+    // the possible cases the primary key could be
+    enum PrimaryKey: Equatable, Hashable {
+        // if no columns are primary; the UUID of the table is the associated value
+        case id(DatabaseTable.ID)
+        // if exactly one column is used; which column it is is the associated value
+        case column(DatabaseColumn)
+        // if more than one column is used; which columns are used is the associated value
+        case columns([DatabaseColumn])
     }
     
     var shouldShow: Bool
@@ -86,46 +75,13 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
         self.databaseID = databaseID
     }
     
-    mutating func removeColumn(_ column: DatabaseColumn) {
-        for var instance in rows {
-            instance.removeValueFor(columnID: column.id)
-        }
-    }
-    
-    mutating func removeColumns(at offsets: IndexSet) {
-        for index in offsets {
-            let column = columns[index]
-            removeColumn(column)
-        }
-    }
-    
-    mutating func addColumn(_ column: DatabaseColumn) {
-        for var instance in rows {
-            let newValue: StoredValue
-            switch column.type {
-            case .int:
-                newValue = .int(nil)
-            case .string:
-                newValue = .string(nil)
-            case .bool:
-                newValue = .bool(nil)
-            case .double:
-                newValue = .double(nil)
-            case .table:
-                newValue = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
-            }
-            instance.updateValueFor(columnID: column.id, newValue: newValue)
-        }
-    }
-    
     // could probably be a computed property but it's theta(n) for n columns, so it's a function
-    ///
     /// Determines which PrimaryKey case is appropriate for this table, and returns it.
     /// - Returns: PrimaryKey.id(self.id) if no columns are primary, PrimaryKey.column with the member of self.columns marked primary if only one is found,
     /// or PrimaryKey.columns with all columns marked primary if more than one is found.
     func primaryKey() -> PrimaryKey {
         var key: [DatabaseColumn] = []
-        for column in columns {
+        for column in SchemaDatabase.used.columnsFor(tableID: id) {
             if column.isPrimary {
                 key.append(column)
             }
@@ -143,14 +99,8 @@ struct DatabaseTable: Identifiable, Equatable, Hashable{
 }
 
 extension DatabaseTable {
-    static let mockID = Self.ID(UUID())
-    
     static func empty(databaseID: Database.ID) -> DatabaseTable {
         return DatabaseTable(name: "", databaseID: databaseID)
-    }
-    
-    static var mockDatabaseTable: DatabaseTable {
-        return DatabaseTable(name: "Table A", id: DatabaseTable.mockID, columns: [.mockColumn], databaseID: Database.mockID)
     }
     
     var shouldShowImage: Image {
@@ -168,6 +118,8 @@ enum ValueType: String, Equatable, Hashable, Codable, DatabaseValueConvertible {
     case table = "Table"
 }
 
+// MARK: - StoredValue
+
 enum StoredValue: Equatable, Hashable, Codable {
     case int(Int?)
     case string(String?)
@@ -178,59 +130,65 @@ enum StoredValue: Equatable, Hashable, Codable {
 
 extension StoredValue: CustomStringConvertible {
     var description: String {
-        switch self {
-        case let .int(i):
-            return i == nil ? "NULL" : String(i!)
-        case let .string(s):
-            return s ?? "NULL"
-        case let .bool(b):
-            return b == nil ? "NULL" : (b! ? "True" : "False")
-        case let .double(d):
-            return d == nil ? "NULL" : String(d!)
-        case let .row(referencedRowID, referencedTableID):
-            if let referencedRowID, let referencedTableID {
-                if let table = SchemaDatabase.used.table(id: referencedTableID) {
-                    let database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
-                    let row = database.row(rowID: referencedRowID, tableID: referencedTableID)
-                    return row?.nonRecursiveDescription ?? "NULL"
-                }
-                return "Holds UUID: \(referencedRowID.uuidString)"
-            }
-        }
-        return "NULL"
+        descriptionsHelper(recursive: true)
     }
     
     var nonRecursiveDescription: String {
+        descriptionsHelper(recursive: false)
+    }
+    
+    private func descriptionsHelper(recursive: Bool) -> String {
         switch self {
+        // for everything but a row, return the NULL if it's nil or the literal string version if it isn't
         case let .int(i):
             return i == nil ? "NULL" : String(i!)
         case let .string(s):
             return s ?? "NULL"
         case let .bool(b):
+            // we want booleans to be capitalized for in-app display, so we convert to a string ourselves
             return b == nil ? "NULL" : (b! ? "True" : "False")
         case let .double(d):
             return d == nil ? "NULL" : String(d!)
-        case let .row(referencedRowID, _):
-            if let referencedRowID {
+        // for a row, we might want its description, or just its UUID
+        case let .row(referencedRowID, referencedTableID):
+            if let referencedRowID, let referencedTableID {
+                if recursive {
+                    // look up its description, if we can
+                    if let table = SchemaDatabase.used.table(id: referencedTableID) {
+                        let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
+                        let row = database.row(rowID: referencedRowID, tableID: referencedTableID)
+                        // if we use the row's recursive description, we could get in an infinite recursive loop, so use the non-recursive description even though recursive is true
+                        // the ideal functionality would have it go to the bottom if there is one, or cut it off early if there isn't, but I can't think of a good way to do that without keeping track of which rows we've asked for the description of as an extra parameter or something
+                        return "Holds: \(row?.nonRecursiveDescription ?? "NULL")"
+                    }
+                }
+                // if recursive is false or the lookup failed, we return the UUID
                 return "Holds UUID: \(referencedRowID.uuidString)"
             }
+            // if the row ID or table ID is nil, return NULL
+            else {
+                return "NULL"
+            }
         }
-        return "NULL"
     }
 }
 
 // MARK: - DatabaseColumn
 
 struct DatabaseColumn: Identifiable, Equatable, Hashable {
-    public private(set) var id: Tagged<Self, UUID>
-    // whether this column is part of the primary key for its table. a column should be marked as primary if the value of all primary columns for a table are enough to uniquely determine which row has those values.
+    var id: Tagged<Self, UUID>
+    // whether this column is part of the primary key for its table
     var isPrimary: Bool
+    
     // the title of this column
     var name: String
+    
     // which data type this column should hold
     var type: ValueType
+    
     // if type is .table, which DatabaseTable this DatabaseColumn holds
     var referencedTableID: DatabaseTable.ID?
+    
     // which DatabaseTable holds this column
     var tableID: DatabaseTable.ID
     
@@ -238,19 +196,18 @@ struct DatabaseColumn: Identifiable, Equatable, Hashable {
         self.name = name
         self.type = type
         self.isPrimary = isPrimary
+        self.tableID = tableID
+        
         if let id {
             self.id = id
         }
         else {
             self.id = Self.ID(UUID())
         }
-        self.tableID = tableID
     }
 }
 
 extension DatabaseColumn {
-    static let mockID = Self.ID(UUID())
-    
     var valueType: String {
         switch type {
         case .table:
@@ -270,10 +227,6 @@ extension DatabaseColumn {
         return DatabaseColumn(name: "", type: .string, tableID: tableID)
     }
     
-    static var mockColumn: DatabaseColumn {
-        return DatabaseColumn(name: "Column A", type: .string, id: DatabaseColumn.mockID, tableID: DatabaseTable.mockID)
-    }
-    
     var primaryKeyImage: Image {
         Image(systemName: isPrimary ? "key.fill" : "key")
     }
@@ -284,45 +237,60 @@ extension DatabaseColumn {
 
 struct DatabaseRow: Identifiable, Equatable, Hashable {
     static func == (lhs: DatabaseRow, rhs: DatabaseRow) -> Bool {
-        return lhs.id == rhs.id // && lhs.tableID == rhs.tableID && lhs.values == rhs.values // Type 'any StoredByUser' cannot conform to Equatable
+        return lhs.id == rhs.id
     }
     
-    public private(set) var id: Tagged<Self, UUID>
+    var id: Tagged<Self, UUID>
     // which DatabaseTable this is an instance of
     let tableID: DatabaseTable.ID
+    
     // https://developer.apple.com/documentation/swift/dictionary
-    // TODO?: computed property that looks up data in the database
-    var values: Dictionary<DatabaseColumn.ID, StoredValue>
+    // the data stored in the database for this row, keyed by column ID
+    private var values: Dictionary<DatabaseColumn.ID, StoredValue>
     
     init(columns: IdentifiedArrayOf<DatabaseColumn>? = nil, id: Self.ID? = nil, tableID: DatabaseTable.ID) {
+        self.tableID = tableID
+        
+        // use the passed ID, if any
         if let id {
             self.id = id
         }
+        // otherwise, create our own
         else {
             self.id = Self.ID(UUID())
         }
+        
+        // initialize self.values
         self.values = [:]
         if let columns {
             for column in columns {
-                self.values[column.id] = nil
+                // setting it to nil removes the entry in the dictionary; we want a StoredValue with associated value nil
+                let value: StoredValue
+                switch column.type {
+                case .table:
+                    value = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
+                case .int:
+                    value = .int(nil)
+                case .string:
+                    value = .string(nil)
+                case .bool:
+                    value = .bool(nil)
+                case .double:
+                    value = .double(nil)
+                }
+                self.values[column.id] = value
             }
         }
-        self.tableID = tableID
     }
     
+    /// - returns: the value this row has for the given column, if any. returns nil only if the row doesn't have this column.
     func valueFor(columnID: DatabaseColumn.ID) -> StoredValue? {
         return values[columnID]
     }
     
-    ///
     /// if the row has this column, it will update its value. otherwise, it will add this column to its columns and give it the given value
     mutating func updateValueFor(columnID: DatabaseColumn.ID, newValue: StoredValue) {
         values[columnID] = newValue
-    }
-    
-    mutating func removeValueFor(columnID: DatabaseColumn.ID) {
-        // assigning a dictionary's value for a given type sets it to nil
-        values[columnID] = nil
     }
 }
 
@@ -334,54 +302,46 @@ extension DatabaseRow {
 
 extension DatabaseRow: CustomStringConvertible {
     var description: String {
-        if let table = SchemaDatabase.used.table(id: tableID) {
-            let primaryKey = table.primaryKey()
-            switch primaryKey {
-            case .id(_):
-                return "Has UUID: " + id.uuidString
-            case let .column(column):
-                if let value = valueFor(columnID: column.id) {
-                    return value.description
-                }
-                else {
-                    return "\(column.name): NULL"
-                }
-            case let .columns(columns):
-                var keyValues: String = "("
-                for column in columns {
-                    keyValues += (column.name + ": " + (values[column.id]?.description ?? "NULL"))
-                    if column != columns.last {
-                        keyValues += ", "
-                    }
-                    else {
-                        keyValues += ")"
-                    }
-                }
-                return keyValues
-            }
-        }
-        else {
-            return id.uuidString
-        }
+        return descriptionsHelper(recursive: true)
     }
     
     var nonRecursiveDescription: String {
+        return descriptionsHelper(recursive: false)
+    }
+    
+    private func descriptionsHelper(recursive: Bool) -> String {
+        // fetch the table this row belongs to so we can know its primary key
         if let table = SchemaDatabase.used.table(id: tableID) {
+            // use the primary key to determine what information is output
             let primaryKey = table.primaryKey()
             switch primaryKey {
+            // if the primary key is our UUID, show that
             case .id(_):
-                return "Holds UUID: " + id.uuidString
+                return "UUID: " + id.uuidString
+            // if it's a single column, show the description of our value for it
             case let .column(column):
                 if let value = valueFor(columnID: column.id) {
-                    return value.nonRecursiveDescription
+                    return recursive ? value.description : value.nonRecursiveDescription
                 }
                 else {
-                    return "\(column.name): NULL"
+                    return "NULL"
                 }
+            // if it's a group of columns, show them in parentheses with labels (e.g. (Name: Club, Cost: 1 sp))
             case let .columns(columns):
                 var keyValues: String = "("
                 for column in columns {
-                    keyValues += (column.name + ": " + (values[column.id]?.nonRecursiveDescription ?? "NULL"))
+                    // add the column label
+                    keyValues += "\(column.name): "
+                    
+                    // add the stored value for the column
+                    if let value = valueFor(columnID: column.id) {
+                        keyValues += recursive ? value.description : value.nonRecursiveDescription
+                    }
+                    else {
+                        keyValues += "NULL"
+                    }
+                    
+                    // separate with a comma or add the closing )
                     if column != columns.last {
                         keyValues += ", "
                     }
@@ -392,8 +352,9 @@ extension DatabaseRow: CustomStringConvertible {
                 return keyValues
             }
         }
+        // if we can't find the table, use the UUID as the ID
         else {
-            return id.uuidString
+            return "UUID: " + id.uuidString
         }
     }
 }
@@ -434,6 +395,7 @@ extension DatabaseColumn: Codable, TableRecord, FetchableRecord, MutablePersista
 }
 
 extension DatabaseRow: Codable, FetchableRecord {
+    // we need custom codable conformance because values isn't stored in the database as a dictionary
     enum CodingKeys: String, CodingKey {
         case id
         case tableID
@@ -441,13 +403,17 @@ extension DatabaseRow: Codable, FetchableRecord {
     
     init(from decoder: Decoder) throws {
         // https://www.hackingwithswift.com/articles/119/codable-cheat-sheet
+        // extract our ID and our table's ID normally, since we'll need them later
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(DatabaseRow.ID.self, forKey: .id)
         tableID = try container.decode(DatabaseTable.ID.self, forKey: .tableID)
+        
+        // the code for extracting self.values from the database is written in UserDatabase.row and doesn't rely on this function, so use it here
         if let table = SchemaDatabase.used.table(id: tableID) {
-            let database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+            let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
             self.values = database.row(rowID: id, tableID: tableID)?.values ?? [:]
         }
+        // if looking up the table failed, just initialize values to be empty
         else {
             values = [:]
         }

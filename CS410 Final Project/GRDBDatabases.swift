@@ -17,6 +17,7 @@ struct SchemaDatabase {
         try migrator.migrate(dbWriter)
     }
     
+    /// - returns: every database we have
     func allDatabases() -> IdentifiedArrayOf<Database> {
         do {
             // fetch the databases
@@ -37,6 +38,8 @@ struct SchemaDatabase {
         }
     }
     
+    /// - parameter id: the ID of the database to retrieve from disc
+    /// - returns: the first database we have with this id, or nil if no database with this id exists
     func database(id: Database.ID) -> Database? {
         do {
             let databases: [Database] = try dbWriter.read { db in
@@ -53,9 +56,11 @@ struct SchemaDatabase {
         }
     }
     
+    /// adds the given database to this schema database
+    /// - parameter database: the database to add on disc
     func addDatabase(_ database: Database) {
-        // insert is marked as mutating, but because we no longer use an autoincrementing primary key, it doesn't actually mutate the value
-        // also, this is called when exiting edit mode, after which the local data is synced with the database, so if it does actually get mutated it should pull the changes from here
+        // insert is marked as mutating, but because we aren't using an autoincrementing primary key, it doesn't seem to actually mutate the value
+        // also, this is called when exiting edit mode, after which the local data is synced with the database, so if it does actually get mutated it should pull the changes immeditately afterwards
         // if it turns out it does mutate localDatabase in a meaningful way, database should be an inout parameter so its value is changed
         var localDatabase = database
         do {
@@ -68,19 +73,24 @@ struct SchemaDatabase {
         }
     }
     
+    /// removes the given database from the database on disc
+    /// - parameter database: the database to remove
     func removeDatabase(_ database: Database) {
         do {
             try dbWriter.write() { db in
-                // delete returns whether it worked, so we got a warning saying it was unused if we don't do anything with it
+                // delete returns whether it worked, so not assinging the return value resulted in a warning
                 let _ = try database.delete(db)
             }
-            DataDatabase.deleteDataFor(databaseID: database.id)
+            // also remove the database we deleted from the disc
+            UserDatabase.deleteDataFor(databaseID: database.id)
         }
         catch {
             print(error)
         }
     }
     
+    /// updates the database on disc to match the given database
+    /// - parameter database: the database with the updated values
     func updateDatabase(_ database: Database) {
         do {
             try dbWriter.write() { db in
@@ -92,6 +102,7 @@ struct SchemaDatabase {
         }
     }
     
+    /// - returns: every table we have in the app
     func allTables() -> IdentifiedArrayOf<DatabaseTable> {
         do {
             // fetch the tables
@@ -112,6 +123,8 @@ struct SchemaDatabase {
         }
     }
     
+    /// - parameter databaseID: the ID of the database to fetch tables for
+    /// - returns: every table belonging to the database with the given ID
     func tablesFor(databaseID: Database.ID) -> IdentifiedArrayOf<DatabaseTable> {
         do {
             // fetch the tables
@@ -135,6 +148,8 @@ struct SchemaDatabase {
         }
     }
     
+    /// - parameter id: the ID to fetch a table for
+    /// - returns: the first table with the given ID, or nil if no table has this ID
     func table(id: DatabaseTable.ID) -> DatabaseTable? {
         do {
             let tables: [DatabaseTable] = try dbWriter.read { db in
@@ -150,13 +165,17 @@ struct SchemaDatabase {
         }
     }
     
+    /// adds the given table to the database on disc
+    /// - parameter table: the table to add to the database
     func addTable(_ table: DatabaseTable) {
         do {
+            // again, I don't believe localTable is mutated, but table should be an inout parameter if it is
             var localTable = table
             try dbWriter.write() { db in
                 try localTable.insert(db)
             }
-            let db = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+            // also add the table to the disc database for its database
+            let db = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
             db.addTable(table)
         }
         catch {
@@ -164,12 +183,16 @@ struct SchemaDatabase {
         }
     }
     
+    /// removes the given table from the database on disc
+    /// - parameter table: the table to remove
     func removeTable(_ table: DatabaseTable) {
         do {
-            let _ = try dbWriter.write() { db in
-                try table.delete(db)
+            try dbWriter.write() { db in
+                // delete returns whether it worked, which is information we don't need
+                let _ = try table.delete(db)
             }
-            let db = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+            // also remove the table from the database on disc
+            let db = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
             db.removeTable(table)
         }
         catch {
@@ -177,6 +200,8 @@ struct SchemaDatabase {
         }
     }
     
+    /// updates the table on disc to match the given table's information
+    /// - parameter table: the table with the updated information
     func updateTable(_ table: DatabaseTable) {
         do {
             try dbWriter.write() { db in
@@ -188,6 +213,7 @@ struct SchemaDatabase {
         }
     }
     
+    /// - returns: all columns we have in the database
     func allColumns() -> IdentifiedArrayOf<DatabaseColumn> {
         do {
             // fetch the columns
@@ -208,6 +234,9 @@ struct SchemaDatabase {
         }
     }
     
+    /// fetches all columns that belong to the table with the given ID
+    /// - parameter tableID: the table to fetch columns for
+    /// - returns: all columns that belong to the given table
     func columnsFor(tableID: DatabaseTable.ID) -> IdentifiedArrayOf<DatabaseColumn> {
         do {
             // fetch the columns
@@ -230,6 +259,7 @@ struct SchemaDatabase {
         }
     }
     
+    /// - returns: the first column on disc with the given ID, or nil if no such column exists
     func column(id: DatabaseColumn.ID) -> DatabaseColumn? {
         do {
             let columns: [DatabaseColumn] = try dbWriter.read { db in
@@ -245,14 +275,20 @@ struct SchemaDatabase {
         }
     }
     
+    /// adds the given column to the database on disc
+    /// - parameter column: the column to add to the database
     func addColumn(_ column: DatabaseColumn) {
         do {
+            // again, if local is mutated, column needs to be inout
             var local = column
-            // update the disc database first so it can have both the old value and the new value
+            
+            // the updateColumn method needs the disc database to be updated first, so the other column methods also update it first
             if let table = table(id: local.tableID) {
-                let db = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                let db = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
                 db.addColumn(local)
             }
+            
+            // now insert the column to the database
             try dbWriter.write() { db in
                 try local.insert(db)
             }
@@ -262,14 +298,19 @@ struct SchemaDatabase {
         }
     }
     
+    /// removes the given column from the database on disc
+    /// - parameter column: the column to remove from the database
     func removeColumn(_ column: DatabaseColumn) {
         do {
+            // updateColumn needs to update the disc database first, so this does to be consistent
             if let table = table(id: column.tableID) {
-                let db = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                let db = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
                 db.removeColumn(column)
             }
-            let _ = try dbWriter.write() { db in
-                try column.delete(db)
+            
+            try dbWriter.write() { db in
+                // delete returns whether it worked, which is info we don't need
+                let _ = try column.delete(db)
             }
         }
         catch {
@@ -277,12 +318,17 @@ struct SchemaDatabase {
         }
     }
     
+    /// updates the database on disc to hold the given column's information instead of the column it already has
+    /// - parameter column: the column with the updated information
     func updateColumn(_ column: DatabaseColumn) {
         do {
+            // update the disc database first so it can compare the new value to the old value
             if let table = table(id: column.tableID) {
-                let db = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                let db = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
                 db.updateColumn(column)
             }
+            
+            // now replace the old value with the new one
             try dbWriter.write() { db in
                 try column.update(db)
             }
@@ -307,11 +353,15 @@ struct SchemaDatabase {
            migrator.registerMigration("createDataModels") { db in
                // Create a table
                // See <https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseschema>
+               
+               // table of databases the user creates
                try db.create(table: "database") { t in
                    t.primaryKey("id", .blob)
-                   t.column("name", .text).notNull()
+                   t.column("name", .text)
+                       .notNull()
                }
                
+               // table of tables the user adds to their databases
                try db.create(table: "databaseTable") { t in
                    t.primaryKey("id", .blob)
                    t.column("databaseID", .integer)
@@ -322,6 +372,7 @@ struct SchemaDatabase {
                    t.column("shouldShow", .boolean)
                }
                
+               // table of columns the user adds to their tables
                try db.create(table: "databaseColumn") { t in
                    t.primaryKey("id", .blob)
                    t.column("tableID", .integer)
@@ -356,7 +407,7 @@ struct SchemaDatabase {
 
 // from https://github.com/dave256/GRDBDemo/blob/main/GRDBDemo/AppDatabase.swift
 extension SchemaDatabase {
-    /// The database the application uses to store the schema. For your own directory/sqlite file, mimic makeDefaultDatabase and replace this with it.
+    /// The database the application uses to store the schema. For your own directory/sqlite file, mimic makeDefaultDatabase and set this variable equal to it.
     static var used = makeDefaultDatabase()
 
     private static func makeDefaultDatabase() -> SchemaDatabase {
@@ -410,12 +461,52 @@ extension SchemaDatabase {
 }
 
 /// One of these objects manages the information for an entry in the SchemaDatabase's database table
-struct DataDatabase {
+struct UserDatabase {
+    // which database object this database is for
     let databaseID: Database.ID
     
-    init(databaseID: Database.ID, _ dbWriter: any DatabaseWriter) {
-        self.databaseID = databaseID
-        self.dbWriter = dbWriter
+    /// - parameter databaseID: the ID of the database to look up
+    /// - returns: an instance connected to the sqlite file on disc for the Database object with the given ID.
+    static func discDatabaseFor(databaseID id: Database.ID) -> UserDatabase {
+        do {
+            // Choose folder
+            let fileManager = FileManager()
+            let folderURL = try urlFor(databaseID: id)
+            
+            // Create the folder if it doesn't exist
+            try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            
+            // Connect to the disc database
+            // See https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseconnections
+            let dbURL = folderURL.appendingPathComponent("\(id).sqlite")
+            let dbPool = try DatabasePool(path: dbURL.path)
+            
+            // Create the requested UserDatabase object
+            let database = UserDatabase(databaseID: id, dbPool)
+            return database
+        }
+        catch {
+            // TODO: Replace this implementation with code to handle the error appropriately.
+            fatalError("Unresolved error \(error)")
+        }
+    }
+    
+    /// removes all data for the specified database from the disc
+    static func deleteDataFor(databaseID id: Database.ID) {
+        // https://developer.apple.com/documentation/foundation/filemanager/1413590-removeitem
+        do {
+            let fileManager = FileManager()
+            let folderURL = try urlFor(databaseID: id)
+            try fileManager.removeItem(at: folderURL)
+        }
+        catch {
+            if error is CocoaError {
+                print(error.localizedDescription)
+            }
+            else {
+                print(error)
+            }
+        }
     }
     
     func rowsFor(table: DatabaseTable) -> IdentifiedArrayOf<DatabaseRow> {
@@ -425,7 +516,8 @@ struct DataDatabase {
             rows = try dbWriter.read { db in
                 // something like:
                 // try DatabaseRow.fetchAll(db, sql: "SELECT * FROM ?", arguments: ["'\(table.id)'"])
-                // would be nice, but i get a syntax error
+                // would be nice, but I get a syntax error from SQLite; I think you can't pass a table name as an argument this way
+                // I'm not super concerned about sql-injection because table.id is a bunch of hex separated by single dashes, so it shouldn't be able to get out of its quotation marks, let alone run malicious SQL code, but it would still be nice to change it if GRDB adds support for it later
                 try DatabaseRow.fetchAll(db, sql: "SELECT * FROM '\(table.id)'")
             }
         } catch {
@@ -439,7 +531,8 @@ struct DataDatabase {
         }
         return identifiedRows
     }
-
+    
+    /// - returns: all rows in this database; only used for debugging in CS410_Final_ProjectApp.swift
     func allRows() -> IdentifiedArrayOf<DatabaseRow> {
         let tables = SchemaDatabase.used.tablesFor(databaseID: databaseID)
         var rows: IdentifiedArrayOf<DatabaseRow> = []
@@ -449,59 +542,60 @@ struct DataDatabase {
         return rows
     }
     
+    /// - parameter rowID: the ID of the row to retrieve
+    /// - parameter tableID: the ID of the table to retrieve the row from
+    /// - returns: the requested row, if it exists
     func row(rowID: DatabaseRow.ID, tableID: DatabaseTable.ID) -> DatabaseRow? {
-        var row = DatabaseRow(id: rowID, tableID: tableID)
         do {
-            // get the table for the specified id
-            if let table = SchemaDatabase.used.table(id: tableID) {
-                let columns = table.columns
-                // get the row for this id
-                if let databaseRow = try dbWriter.read({ db in
-                    try Row.fetchOne(db,
-                                     sql: "SELECT * FROM '\(tableID)' WHERE id = ?",
-                                     arguments: [rowID.databaseValue])
-                    
-                })
-                // if the row exists, fill row.values with the values from the database
-                {
-                    for column in columns {
-                        let newValue: StoredValue
-                        switch column.type {
+            var row = DatabaseRow(id: rowID, tableID: tableID)
+            let columns = SchemaDatabase.used.columnsFor(tableID: tableID)
+            // get the row for this id
+            if let databaseRow = try dbWriter.read({ db in
+                try Row.fetchOne(db,
+                                 sql: "SELECT * FROM '\(tableID)' WHERE id = ?",
+                                 arguments: [rowID.databaseValue])
+                
+            })
+            // if the row exists, fill row.values with the values from the database
+            {
+                for column in columns {
+                    let newValue: StoredValue
+                    switch column.type {
                         // simple for everything but table
-                        case .int:
-                            let value: Int? = databaseRow["\(column.id)"]
-                            newValue = .int(value)
-                        case .string:
-                            let value: String? = databaseRow["\(column.id)"]
-                            newValue = .string(value)
-                        case .bool:
-                            let value: Bool? = databaseRow["\(column.id)"]
-                            newValue = .bool(value)
-                        case .double:
-                            let value: Double? = databaseRow["\(column.id)"]
-                            newValue = .double(value)
+                    case .int:
+                        let value: Int? = databaseRow["\(column.id)"]
+                        newValue = .int(value)
+                    case .string:
+                        let value: String? = databaseRow["\(column.id)"]
+                        newValue = .string(value)
+                    case .bool:
+                        let value: Bool? = databaseRow["\(column.id)"]
+                        newValue = .bool(value)
+                    case .double:
+                        let value: Double? = databaseRow["\(column.id)"]
+                        newValue = .double(value)
                         // for a table, we need to convert from the DatabaseValue that's stored
-                        case .table:
-                            // this only returns nil if the column doesn't exist
-                            let value: DatabaseValue? = databaseRow["\(column.id)"]
-                            // if the column exists, try to get the ID
-                            if let value {
-                                // if we can convert this to a UUID, put it in the row
-                                if let rawID = UUID.fromDatabaseValue(value) {
-                                    newValue = .row(referencedRowID: DatabaseRow.ID(rawID), referencedTableID: column.referencedTableID)
-                                }
-                                // otherwise, say it's nil
-                                else {
-                                    newValue = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
-                                }
+                    case .table:
+                        // this only returns nil if the column doesn't exist
+                        let value: DatabaseValue? = databaseRow["\(column.id)"]
+                        // if the column exists, try to get the ID
+                        if let value {
+                            // if we can convert this to a UUID, put it in the row
+                            if let rawID = UUID.fromDatabaseValue(value) {
+                                newValue = .row(referencedRowID: DatabaseRow.ID(rawID), referencedTableID: column.referencedTableID)
                             }
-                            // if the column doesn't exist, say it's nil
+                            // otherwise, say it's nil
                             else {
                                 newValue = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
                             }
                         }
-                        row.updateValueFor(columnID: column.id, newValue: newValue)
+                        // if the column doesn't exist, say it's nil
+                        else {
+                            newValue = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
+                        }
                     }
+                    // put the value for this column in the row
+                    row.updateValueFor(columnID: column.id, newValue: newValue)
                 }
             }
             return row
@@ -510,54 +604,6 @@ struct DataDatabase {
             print(error)
             return nil
         }
-    }
-    
-    func argumentsFor(row: DatabaseRow) -> (columnNames: String, labels: String, arguments: StatementArguments)? {
-        if let table = SchemaDatabase.used.table(id: row.tableID) {
-            // programatically determine the syntax to match https://github.com/groue/GRDB.swift#executing-updates
-            // goal: INSERT INTO \(table.id) ([each column name separated by columns]) VALUES ([each value for the column])
-            // example: sql: "INSERT INTO player (name, score) VALUES (?, ?)", arguments: ["Barbara", 1000]
-            
-            // this is what would be "name, score" in the example
-            var columnNames = "id, tableID"
-            // this would be ":name, :score"
-            var prefixes = ":id, :tableID"
-            // this would be ["name": name, "score": 1000]
-            var arguments: StatementArguments = ["id": row.id.databaseValue, "tableID": row.tableID.databaseValue]
-            for i in 0..<table.columns.count {
-                let column = table.columns[i]
-                // the column's name in the database is its id
-                columnNames += ", '\(column.id)'"
-                // identify each column in the parameters by its current index
-                // we might not get the same prefix for each column each time, labels and arguments match, so it shouldn't matter
-                let prefix = String(i)
-                prefixes += ", :\(prefix)"
-                // the raw value that we should insert in the database
-                let argument: StatementArguments
-                // if we have a value, extract the associated data and insert it
-                if let value = row.values[column.id] {
-                    switch value {
-                    case .bool(let b):
-                        argument = [prefix: b]
-                    case .double(let d):
-                        argument = [prefix: d]
-                    case .int(let i):
-                        argument = [prefix: i]
-                    case .string(let s):
-                        argument = [prefix: s]
-                    case .row(let referencedRowID, _):
-                        argument = [prefix: referencedRowID?.databaseValue]
-                    }
-                }
-                // otherwise, just add nil
-                else {
-                    argument = [prefix: nil]
-                }
-                arguments += argument
-            }
-            return (columnNames, prefixes, arguments)
-        }
-        return nil
     }
     
     func addRow(_ row: DatabaseRow) {
@@ -618,7 +664,7 @@ struct DataDatabase {
                 try db.execute(sql: "DELETE FROM '\(row.tableID)' WHERE id = ?", arguments: [row.id.databaseValue])
             }
         } catch {
-            // TODO: show pop-up saying delete failed ("FOREIGN KEY constraint failed - while executing ..."
+            // TODO: show pop-up saying delete failed ("FOREIGN KEY constraint failed - while executing ...")
             // something like "Cannot delete row [abc], [def] in table [ghi] uses it"
             print(error)
         }
@@ -629,6 +675,8 @@ struct DataDatabase {
         // run SQL to add the table
         do {
             try dbWriter.write { db in
+                // the two columns every table has are a row's ID and a row's tableID
+                // we could avoid storing the tableID in the database if we could somehow access the table's name while reading a row, but I wasn't able to figure out how to do it
                 try db.create(table: "\(table.id)") { t in
                     // the ID of rows in this table is a DatabaseRow.ID
                     t.primaryKey("id", .blob)
@@ -668,7 +716,7 @@ struct DataDatabase {
                     switch column.type {
                     case .table:
                         dataType = .blob
-                        // if the column should reference another table, set it up so it does
+                        // if the column should reference another table, set it up so it does; if it doesn't, the code after the switch will add it
                         if let otherTableID = column.referencedTableID {
                             t.add(column: "\(column.id)", dataType)
                                 .references("\(otherTableID)")
@@ -731,9 +779,14 @@ struct DataDatabase {
     }
     
     private let dbWriter: any DatabaseWriter
-}
-
-extension DataDatabase {
+    
+    init(databaseID: Database.ID, _ dbWriter: any DatabaseWriter) {
+        self.databaseID = databaseID
+        self.dbWriter = dbWriter
+    }
+    
+    /// - parameter databaseID: the database to determine a URL for
+    /// - returns: a URL object set to the folder the database's sqlite file is in
     private static func urlFor(databaseID id: Database.ID) throws -> URL {
         let fileManager = FileManager()
         let folderURL = try fileManager
@@ -744,46 +797,54 @@ extension DataDatabase {
         return folderURL
     }
     
-    /// Creates an instance connected to the Database object with the given ID.
-    static func discDatabaseFor(databaseID id: Database.ID) -> DataDatabase {
-        do {
-            // Choose folder
-            let fileManager = FileManager()
-            let folderURL = try urlFor(databaseID: id)
-            
-            // Create the folder if it doesn't exist
-            try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-            
-            // Connect to the disc database
-            // See https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseconnections
-            let dbURL = folderURL.appendingPathComponent("\(id).sqlite")
-            let dbPool = try DatabasePool(path: dbURL.path)
-            
-            // Create the requested DataDatabase object
-            let database = DataDatabase(databaseID: id, dbPool)
-            return database
-        }
-        catch {
-            // TODO: Replace this implementation with code to handle the error appropriately.
-            fatalError("Unresolved error \(error)")
-        }
-    }
-        
-    /// removes all data for the specified database from the disc
-    static func deleteDataFor(databaseID id: Database.ID) {
-        // https://developer.apple.com/documentation/foundation/filemanager/1413590-removeitem
-        do {
-            let fileManager = FileManager()
-            let folderURL = try urlFor(databaseID: id)
-            try fileManager.removeItem(at: folderURL)
-        }
-        catch {
-            if error is CocoaError {
-                print(error.localizedDescription)
+    
+    /// programatically determine the syntax to match https://github.com/groue/GRDB.swift#executing-updates
+    /// goal: INSERT INTO \(table.id) ([each column name separated by commas]) VALUES ([each value for the column])
+    /// example: sql: "INSERT INTO player (name, score) VALUES (:name, :score)", arguments: ["name": "Barbara", "score": 1000]
+    /// - parameter row: the row to create arguments for
+    /// - returns: columnNames would be "name, score", labels would be ":name, :score", and arguments would be ["name": "Barbara", "score": 1000] for the given example
+    private func argumentsFor(row: DatabaseRow) -> (columnNames: String, labels: String, arguments: StatementArguments)? {
+        if let table = SchemaDatabase.used.table(id: row.tableID) {
+            // this would be "name, score" in the example
+            var columnNames = "id, tableID"
+            // this would be ":name, :score"
+            var prefixes = ":id, :tableID"
+            // this would be ["name": name, "score": 1000]
+            var arguments: StatementArguments = ["id": row.id.databaseValue, "tableID": row.tableID.databaseValue]
+            let columns = SchemaDatabase.used.columnsFor(tableID: table.id)
+            for i in 0..<columns.count {
+                let column = columns[i]
+                // the column's name in the database is its id
+                columnNames += ", '\(column.id)'"
+                // identify each column in the parameters by its current index
+                // we might not get the same prefix for each column each time this method is called, but labels and arguments match, so it shouldn't matter
+                let prefix = String(i)
+                prefixes += ", :\(prefix)"
+                // the raw value that we should insert in the database
+                let argument: StatementArguments
+                // if we have a value, extract the associated data and insert it
+                if let value = row.valueFor(columnID: column.id) {
+                    switch value {
+                    case .bool(let b):
+                        argument = [prefix: b]
+                    case .double(let d):
+                        argument = [prefix: d]
+                    case .int(let i):
+                        argument = [prefix: i]
+                    case .string(let s):
+                        argument = [prefix: s]
+                    case .row(let referencedRowID, _):
+                        argument = [prefix: referencedRowID?.databaseValue]
+                    }
+                }
+                // otherwise, just add nil
+                else {
+                    argument = [prefix: nil]
+                }
+                arguments += argument
             }
-            else {
-                print(error)
-            }
+            return (columnNames, prefixes, arguments)
         }
+        return nil
     }
 }

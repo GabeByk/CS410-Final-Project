@@ -10,7 +10,6 @@ import IdentifiedCollections
 
 protocol ColumnSaver: AnyObject {
     func updateColumn(_ column: DatabaseColumn)
-    func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
 }
 
 extension EditColumnsModel: ColumnSaver {
@@ -18,10 +17,6 @@ extension EditColumnsModel: ColumnSaver {
         columns[id: column.id] = column
         SchemaDatabase.used.updateColumn(column)
         parentModel?.updateTable(table)
-    }
-    
-    func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
-        return parentModel?.tableFor(id: id)
     }
 }
 
@@ -107,7 +102,7 @@ final class EditColumnModel: ViewModel {
         switch column.type {
         case .table:
             if let id = column.referencedTableID {
-                return parentModel?.tableFor(id: id)
+                return SchemaDatabase.used.table(id: id)
             }
             else {
                 return nil
@@ -175,7 +170,7 @@ struct EditColumn: View {
                         Picker("Table:", selection: $model.selectedTable) {
                             ForEach(model.tables, id:\.self) { rowID in
                                 if let id = DatabaseTable.ID(uuidString: rowID) {
-                                    Text(model.parentModel?.tableFor(id: id)?.name ?? "Table not found")
+                                    Text(SchemaDatabase.used.table(id: id)?.name ?? "Table not found")
                                 }
                                 else {
                                     Text(rowID)
@@ -211,11 +206,5 @@ struct EditColumn: View {
         } nonEditingView: {
             navigatingView
         }
-    }
-}
-
-struct ColumnView_Preview: PreviewProvider {
-    static var previews: some View {
-        EditColumn(model: EditColumnModel(column: .empty(tableID: DatabaseTable.mockID), isEditing: true))
     }
 }

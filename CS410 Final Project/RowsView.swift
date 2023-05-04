@@ -24,33 +24,43 @@ final class EditTableModel: ViewModel {
     weak var parentModel: RowsSaver?
     @Published var table: DatabaseTable
     @Published var rows: IdentifiedArrayOf<DatabaseRow>
-    var database: DataDatabase
     
     init(parentModel: RowsSaver? = nil, table: DatabaseTable, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.table = table
-        self.database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+        let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
         self.rows = database.rowsFor(table: table)
         super.init(isEditing: isEditing)
     }
     
     override func editButtonPressed() {
+        // open a connection to the disc database
+        let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
+        
         if isEditing {
-            for row in table.rows {
-                if let updatedRow = rows[id: row.id] {
+            // update the disc database to reflect the changes the user made
+            let rows = database.rowsFor(table: table)
+            for row in rows {
+                // if both the disc and our local copy have a row, make sure the database's copy is up-to-date
+                if let updatedRow = self.rows[id: row.id] {
                     database.updateRow(updatedRow)
-                    rows.remove(updatedRow)
+                    self.rows.remove(updatedRow)
                 }
+                // if the disc has it and we don't, the user must have deleted it
                 else {
                     database.removeRow(row)
                 }
             }
-            for row in rows {
+            // since everything that the disc database has was removed from self.rows, everything else is what it didn't have
+            // therefore, we should add what we have left
+            for row in self.rows {
                 database.addRow(row)
             }
+            // propogate updates to higher levels
             parentModel?.updateTable(table)
         }
-        rows = table.rows
+        // we may have changed the database while editing, so get the newest data from the database
+        self.rows = database.rowsFor(table: table)
         if let table = SchemaDatabase.used.table(id: table.id) {
             self.table = table
         }
@@ -59,7 +69,9 @@ final class EditTableModel: ViewModel {
     
     override func cancelButtonPressed() {
         isEditing.toggle()
-        rows = table.rows
+        // discard the changes the user made
+        let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
+        rows = database.rowsFor(table: table)
     }
     
     func viewColumnsPressed() {
@@ -130,11 +142,5 @@ struct EditTableView: View {
                 }
             }
         }
-    }
-}
-
-struct RowsView_Preview: PreviewProvider {
-    static var previews: some View {
-        TableView_Preview.previews
     }
 }

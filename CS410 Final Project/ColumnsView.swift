@@ -11,7 +11,6 @@ import IdentifiedCollections
 protocol ColumnsSaver: AnyObject {
     func updateTable(_ table: DatabaseTable)
     func exitColumnsView()
-    func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
 }
 
 extension EditDatabaseTableModel: ColumnsSaver {
@@ -23,10 +22,6 @@ extension EditDatabaseTableModel: ColumnsSaver {
     func exitColumnsView() {
         state = .table
     }
-    
-    func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
-        parentModel?.tableFor(id: id)
-    }
 }
 
 final class EditColumnsModel: ViewModel {
@@ -37,7 +32,7 @@ final class EditColumnsModel: ViewModel {
     init(parentModel: ColumnsSaver? = nil, table: DatabaseTable, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.table = table
-        self.columns = table.columns
+        self.columns = SchemaDatabase.used.columnsFor(tableID: table.id)
         super.init(isEditing: isEditing)
     }
     
@@ -47,13 +42,14 @@ final class EditColumnsModel: ViewModel {
     
     override func editButtonPressed() {
         if isEditing {
-            // table.columns is the columns for this table in the database
-            for column in table.columns {
+            let columns = SchemaDatabase.used.columnsFor(tableID: table.id)
+            // columns is the columns for this table in the database
+            for column in columns {
                 // if we both have a column with this id, update the database with the data for our version
-                if let updatedColumn = columns[id: column.id] {
+                if let updatedColumn = self.columns[id: column.id] {
                     SchemaDatabase.used.updateColumn(updatedColumn)
                     // remove the column from our version so we know anything left in it was added by the user
-                    columns.remove(updatedColumn)
+                    self.columns.remove(updatedColumn)
                 }
                 // if the database has it but we don't, it should be removed
                 else {
@@ -61,13 +57,13 @@ final class EditColumnsModel: ViewModel {
                 }
             }
             // any columns now left in columns were added to the database, but not in the list yet
-            for column in columns {
+            for column in self.columns {
                 SchemaDatabase.used.addColumn(column)
             }
             parentModel?.updateTable(table)
         }
         // we need to sync our local variable with the database in either case
-        columns = table.columns
+        self.columns = SchemaDatabase.used.columnsFor(tableID: table.id)
         isEditing.toggle()
     }
     
@@ -153,12 +149,11 @@ struct EditColumnsView: View {
                     // the button shouldn't be at the bottom of the screen
                     // https://stackoverflow.com/questions/74407838/why-am-i-getting-this-systemgesturegate-0x102210320-gesture-system-gesture
                     Button("View Rows") {
-                        // TODO: this button takes a while
                         model.viewTablePressed()
                     }
                 }
                 Section("Columns") {
-                    ForEach(model.table.columns) { column in
+                    ForEach(SchemaDatabase.used.columnsFor(tableID: model.table.id)) { column in
                         NavigationLink(value: NavigationPathCase.column(EditColumnModel(parentModel: model, column: column, isEditing: false))) {
                             HStack {
                                 Text(column.name)
@@ -168,18 +163,12 @@ struct EditColumnsView: View {
                             }
                         }
                     }
-                    if model.table.columns.count == 0 {
+                    if SchemaDatabase.used.columnsFor(tableID: model.table.id).count == 0 {
                         Text("Try adding some columns in the edit view!")
                     }
                 }
 
             }
         }
-    }
-}
-
-struct ColumnsView_Previews: PreviewProvider {
-    static var previews: some View {
-        TableView_Preview.previews
     }
 }

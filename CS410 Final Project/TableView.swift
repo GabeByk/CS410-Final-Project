@@ -16,7 +16,6 @@ enum EditTableViewState {
 @MainActor
 protocol DatabaseTableSaver: AnyObject {
     func updateTable(table: DatabaseTable)
-    func tableFor(id: DatabaseTable.ID) -> DatabaseTable?
 }
 
 extension EditDatabaseModel: DatabaseTableSaver {
@@ -25,15 +24,10 @@ extension EditDatabaseModel: DatabaseTableSaver {
         SchemaDatabase.used.updateTable(table)
         parentModel?.updateDatabase(database: database)
     }
-    
-    func tableFor(id: DatabaseTable.ID) -> DatabaseTable? {
-        return database.tables[id: id]
-    }
 }
 
 @MainActor
 final class EditDatabaseTableModel: ObservableObject {
-    // this being weak doesn't seem to break anything
     weak var parentModel: DatabaseTableSaver?
     @Published var table: DatabaseTable
     @Published var state: EditTableViewState
@@ -65,19 +59,5 @@ struct EditTable: View {
         case .table:
             EditTableView(model: EditTableModel(parentModel: model, table: model.table))
         }
-    }
-}
-
-struct TableView_Preview: PreviewProvider {
-    struct Preview: View {
-        @StateObject var app: AppModel = .mockTable
-        
-        var body: some View {
-            ContentView(app: app)
-        }
-    }
-    
-    static var previews: some View {
-        Preview()
     }
 }

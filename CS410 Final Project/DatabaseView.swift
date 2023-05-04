@@ -35,7 +35,7 @@ final class EditDatabaseModel: ViewModel {
     init(parentModel: DatabaseSaver? = nil, database: Database, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.database = database
-        self.tables = database.tables
+        self.tables = SchemaDatabase.used.tablesFor(databaseID: database.id)
         super.init(isEditing: isEditing)
     }
     
@@ -43,7 +43,7 @@ final class EditDatabaseModel: ViewModel {
         // if we're exiting editing mode, update the database
         if isEditing {
             // database.tables is a computed property that returns all of the tables for this database currently stored in SchemaDatabase.shared
-            for table in database.tables {
+            for table in SchemaDatabase.used.tablesFor(databaseID: database.id) {
                 // if we both have a table of this id, update the database to have our version
                 if let updatedTable = tables[id: table.id] {
                     SchemaDatabase.used.updateTable(updatedTable)
@@ -62,7 +62,7 @@ final class EditDatabaseModel: ViewModel {
             parentModel?.updateDatabase(database: database)
         }
         // I would think that I only need to set this when entering edit mode, but for some reason not setting it when exiting edit mode causes a crash when renaming an empty table. Similarly, adding this line to cancelButtonPressed causes a crash when cancelling adding a table with a non-empty name.
-        self.tables = database.tables
+        self.tables = SchemaDatabase.used.tablesFor(databaseID: database.id)
         isEditing.toggle()
     }
     
@@ -86,7 +86,7 @@ final class EditDatabaseModel: ViewModel {
     
     /// - returns: true if there are no unhidden tables, false otherwise
     func allTablesHidden() -> Bool {
-        for table in database.tables {
+        for table in SchemaDatabase.used.tablesFor(databaseID: database.id) {
             if table.shouldShow {
                 return false
             }
@@ -141,14 +141,14 @@ struct EditDatabase: View {
                 Text(model.database.name)
             }
             Section("Tables") {
-                ForEach(model.database.tables) { table in
+                ForEach(SchemaDatabase.used.tablesFor(databaseID: model.database.id)) { table in
                     if table.shouldShow {
                         NavigationLink(value: NavigationPathCase.table(EditDatabaseTableModel(parentModel: model, table: table))) {
                             Text(table.name)
                         }
                     }
                 }
-                if model.database.tables.count == 0 {
+                if SchemaDatabase.used.tablesFor(databaseID: model.database.id).count == 0 {
                     Text("Try adding some tables in the edit view!")
                 }
                 else if model.allTablesHidden() {
@@ -156,20 +156,5 @@ struct EditDatabase: View {
                 }
             }
         }
-    }
-}
-
-struct DatabaseView_Previews: PreviewProvider {
-    
-    struct Preview: View {
-        @StateObject var app: AppModel = .mockDatabase
-        
-        var body: some View {
-            ContentView(app: app)
-        }
-    }
-    
-    static var previews: some View {
-        Preview()
     }
 }

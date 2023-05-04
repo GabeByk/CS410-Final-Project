@@ -51,7 +51,7 @@ final class EditRowModel: ViewModel {
                             // and the table exists
                             if let schemaTable = SchemaDatabase.used.table(id: referencedTableID) {
                                 // get the database on disc that matches this table
-                                let database = DataDatabase.discDatabaseFor(databaseID: schemaTable.databaseID)
+                                let database = UserDatabase.discDatabaseFor(databaseID: schemaTable.databaseID)
                                 // get the rows for the table
                                 let rows = database.rowsFor(table: schemaTable)
                                 for row in rows {
@@ -87,7 +87,7 @@ final class EditRowModel: ViewModel {
                         validValues = ["NULL"]
                         if let referencedRowID, let referencedTableID {
                             if let table = SchemaDatabase.used.table(id: referencedTableID) {
-                                let database = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                                let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
                                 validValues = [database.row(rowID: referencedRowID, tableID: referencedTableID)?.description ?? "NULL"]
                             }
                         }
@@ -115,7 +115,7 @@ final class EditRowModel: ViewModel {
     override func editButtonPressed() {
         if isEditing {
             if let table = SchemaDatabase.used.table(id: row.tableID) {
-                let discDatabase = DataDatabase.discDatabaseFor(databaseID: table.databaseID)
+                let discDatabase = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
                 for value in values {
                     let newValue: StoredValue
                     if let column = SchemaDatabase.used.column(id: value.id) {
@@ -308,7 +308,7 @@ struct EditableColumnValueView: View {
     }
 }
 
-struct RowView: View {
+struct EditRow: View {
     @ObservedObject var model: EditRowModel
     
     var editingView: some View {
@@ -342,11 +342,5 @@ struct RowView: View {
         } nonEditingView: {
             nonEditingView
         }
-    }
-}
-
-struct RowView_Previews: PreviewProvider {
-    static var previews: some View {
-        RowView(model: EditRowModel(row: .empty(tableID: DatabaseTable.mockID)))
     }
 }
