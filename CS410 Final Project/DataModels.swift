@@ -244,7 +244,6 @@ struct DatabaseRow: Identifiable, Equatable, Hashable {
     // which DatabaseTable this is an instance of
     let tableID: DatabaseTable.ID
     
-    // https://developer.apple.com/documentation/swift/dictionary
     // the data stored in the database for this row, keyed by column ID
     private var values: Dictionary<DatabaseColumn.ID, StoredValue>
     
@@ -402,7 +401,6 @@ extension DatabaseRow: Codable, FetchableRecord {
     }
     
     init(from decoder: Decoder) throws {
-        // https://www.hackingwithswift.com/articles/119/codable-cheat-sheet
         // extract our ID and our table's ID normally, since we'll need them later
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(DatabaseRow.ID.self, forKey: .id)

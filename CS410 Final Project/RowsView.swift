@@ -11,16 +11,17 @@ import IdentifiedCollections
 
 protocol RowsSaver: AnyObject {
     func updateTable(_ table: DatabaseTable)
-    func exitTableView()
+    func exitRowsView()
 }
 
-extension EditDatabaseTableModel: RowsSaver {
-    func exitTableView() {
+extension EditTableModel: RowsSaver {
+    // the EditTableModel gets its updateTable method from its conformance to ColumnsSaver, so we don't have to write it here
+    func exitRowsView() {
         state = .columns
     }
 }
 
-final class EditTableModel: ViewModel {
+final class EditRowsModel: ViewModel {
     weak var parentModel: RowsSaver?
     @Published var table: DatabaseTable
     @Published var rows: IdentifiedArrayOf<DatabaseRow>
@@ -68,14 +69,14 @@ final class EditTableModel: ViewModel {
     }
     
     override func cancelButtonPressed() {
-        isEditing.toggle()
+        isEditing = false
         // discard the changes the user made
         let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
         rows = database.rowsFor(table: table)
     }
     
     func viewColumnsPressed() {
-        parentModel?.exitTableView()
+        parentModel?.exitRowsView()
     }
     
     func addRowPressed() {
@@ -87,25 +88,25 @@ final class EditTableModel: ViewModel {
     }
 }
 
-struct EditTableView: View {
-    @ObservedObject var model: EditTableModel
+struct EditRows: View {
+    @ObservedObject var model: EditRowsModel
     var body: some View {
         ModelDrivenView(model: model) {
-            editingTableView
+            editingView
         } nonEditingView: {
-            tableView
+            navigatingView
         }
     }
     
-    var editingTableView: some View {
+    var editingView: some View {
         VStack {
             List {
                 Section("Table") {
-                    Text("\(model.table.name)")
+                    Text(model.table.name)
                 }
                 Section("Rows") {
                     ForEach(model.rows) { row in
-                        Text("\(row.description)")
+                        Text(row.description)
                     }
                     .onDelete(perform: removeRows)
                     
@@ -121,11 +122,11 @@ struct EditTableView: View {
         model.removeRows(at: offsets)
     }
     
-    var tableView: some View {
+    var navigatingView: some View {
         VStack {
             List {
                 Section("Table") {
-                    Text("\(model.table.name)")
+                    Text(model.table.name)
                     Button("View Columns") {
                         model.viewColumnsPressed()
                     }
@@ -133,7 +134,7 @@ struct EditTableView: View {
                 Section("Rows") {
                     ForEach(model.rows) { row in
                         NavigationLink(value: NavigationPathCase.row(EditRowModel(parentModel: model, row: row))) {
-                            Text("\(row.description)")
+                            Text(row.description)
                         }
                     }
                     if model.rows.count == 0 {

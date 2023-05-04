@@ -11,7 +11,7 @@ import IdentifiedCollections
 // TODO: cases for columns and rows?
 enum NavigationPathCase: Equatable, Hashable {
     case database(EditDatabaseModel)
-    case table(EditDatabaseTableModel)
+    case table(EditTableModel)
     case column(EditColumnModel)
     case row(EditRowModel)
 }

@@ -405,7 +405,6 @@ struct SchemaDatabase {
     private let dbWriter: any DatabaseWriter
 }
 
-// from https://github.com/dave256/GRDBDemo/blob/main/GRDBDemo/AppDatabase.swift
 extension SchemaDatabase {
     /// The database the application uses to store the schema. For your own directory/sqlite file, mimic makeDefaultDatabase and set this variable equal to it.
     static var used = makeDefaultDatabase()
@@ -493,7 +492,6 @@ struct UserDatabase {
     
     /// removes all data for the specified database from the disc
     static func deleteDataFor(databaseID id: Database.ID) {
-        // https://developer.apple.com/documentation/foundation/filemanager/1413590-removeitem
         do {
             let fileManager = FileManager()
             let folderURL = try urlFor(databaseID: id)
@@ -798,7 +796,7 @@ struct UserDatabase {
     }
     
     
-    /// programatically determine the syntax to match https://github.com/groue/GRDB.swift#executing-updates
+    /// programmatically determine the syntax to match https://github.com/groue/GRDB.swift#executing-updates
     /// goal: INSERT INTO \(table.id) ([each column name separated by commas]) VALUES ([each value for the column])
     /// example: sql: "INSERT INTO player (name, score) VALUES (:name, :score)", arguments: ["name": "Barbara", "score": 1000]
     /// - parameter row: the row to create arguments for

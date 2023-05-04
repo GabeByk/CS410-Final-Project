@@ -10,6 +10,7 @@ import IdentifiedCollections
 import SwiftUI
 
 @MainActor
+/// generic class used so the ModelDrivenView can encapsulate as much code as possible
 class ViewModel: ObservableObject {
     
     init(isEditing: Bool = false) {
@@ -29,7 +30,7 @@ class ViewModel: ObservableObject {
 }
 
 extension ViewModel: Equatable, Hashable {
-    // default implementations for equatable and hashable conformance
+    // default implementations for automatic equatable and hashable conformance
     nonisolated static func == (lhs: ViewModel, rhs: ViewModel) -> Bool {
         return lhs === rhs
     }
@@ -39,6 +40,7 @@ extension ViewModel: Equatable, Hashable {
     }
 }
 
+// helper view to automatically show edit and cancel buttons, as well as switch between views depending on model.isEditing
 struct ModelDrivenView: View {
     let editingView: () -> any View
     let nonEditingView: () -> any View
@@ -53,7 +55,6 @@ struct ModelDrivenView: View {
     var body: some View {
         VStack {
             if model.isEditing {
-                // https://www.swiftbysundell.com/articles/opaque-return-types-in-swift/
                 AnyView(editingView())
                     .navigationBarBackButtonHidden()
             }
@@ -90,27 +91,26 @@ struct ModelDrivenView: View {
 @MainActor
 protocol DatabasesSaver: AnyObject {
     func updateDatabases(databases: IdentifiedArrayOf<Database>, updateSchemaDatabase: Bool)
-    var databases: IdentifiedArrayOf<Database> { get }
 }
 
 extension AppModel: DatabasesSaver {
     func updateDatabases(databases: IdentifiedArrayOf<Database>, updateSchemaDatabase: Bool = true) {
         var draftDatabases = databases
         if updateSchemaDatabase {
-            // for each database we have,
+            // for each database in the schema database,
             for database in self.databases {
                 // if the new version also has it, update it
                 if let updated = databases[id: database.id] {
                     SchemaDatabase.used.updateDatabase(updated)
                     self.databases[id: updated.id] = updated
+                    // remove this database from the draft so we can know anything that remains was added
+                    draftDatabases.remove(database)
                 }
-                // otherwise, remove it
+                // otherwise, remove it from the schema database
                 else {
                     SchemaDatabase.used.removeDatabase(database)
                     self.databases.remove(database)
                 }
-                // remove this database from the draft so we can know anything that remains was added
-                draftDatabases.remove(database)
             }
             // add everything that's new
             for database in draftDatabases {
@@ -130,27 +130,32 @@ final class EditDatabasesModel: ViewModel {
     @Published var draftDatabases: IdentifiedArrayOf<Database>
     
     var databases: IdentifiedArrayOf<Database> {
-        parentModel?.databases ?? []
+        SchemaDatabase.used.allDatabases()
     }
     
     init(parentModel: DatabasesSaver? = nil, isEditing: Bool = false) {
         self.parentModel = parentModel
-        self.draftDatabases = parentModel?.databases ?? []
+        // initialize draftDatabases before super.init
+        self.draftDatabases = []
         super.init(isEditing: isEditing)
+        // give it the value it's supposed to have after, since we can't use self.databases before super.init
+        self.draftDatabases = self.databases
     }
         
     override func editButtonPressed() {
         if isEditing {
-            // we may have changed multiple databases, so we're responsible for updating the SchemaDatabase
+            // we may have changed multiple databases, so we need to make sure the schema database is updated
             parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: true)
         }
         else {
+            // if we're entering edit mode, make sure we have the most up-to-date information
             draftDatabases = databases
         }
         isEditing.toggle()
     }
     
     override func cancelButtonPressed() {
+        // all we need to do is exit edit mode
         isEditing = false
     }
     

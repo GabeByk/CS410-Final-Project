@@ -26,32 +26,41 @@ final class EditColumnModel: ViewModel {
     weak var parentModel: ColumnSaver?
     @Published var column: DatabaseColumn
     @Published var draftColumn: DatabaseColumn
+    
+    // the variable that holds which data type the user currently has selected
     @Published var selectedType: String {
+        // update draftColumn's instance variables to match the given data type each time the user selects a different data type
         didSet {
-            let selected = selectedType
-            switch selected {
+            switch selectedType {
+            // selected type is Text
             case ValueType.string.rawValue:
                 draftColumn.type = .string
                 draftColumn.referencedTableID = nil
+            // selected type is Integer
             case ValueType.int.rawValue:
                 draftColumn.type = .int
                 draftColumn.referencedTableID = nil
+            // selected type is Decimal
             case ValueType.double.rawValue:
                 draftColumn.type = .double
                 draftColumn.referencedTableID = nil
+            // selected type is True or False
             case ValueType.bool.rawValue:
                 draftColumn.type = .bool
                 draftColumn.referencedTableID = nil
+            // selected type is Table
             case ValueType.table.rawValue:
-                // https://developer.apple.com/documentation/foundation/uuid/3126814-init
+                // if we can get a UUID from the selected table, say it's the table we're referencing
                 if let id = DatabaseTable.ID(uuidString: selectedTable) {
                     draftColumn.type = .table
                     draftColumn.referencedTableID = id
                 }
+                // otherwise, say we aren't referencing any table (e.g. perhaps the user hasn't created the table they want yet)
                 else {
                     draftColumn.type = .table
                     draftColumn.referencedTableID = nil
                 }
+            // we need a default since we're checking string equality rather than using an enum, but this should be all the values the user can choose from
             default:
                 break
             }
@@ -59,9 +68,9 @@ final class EditColumnModel: ViewModel {
     }
     
     @Published var selectedTable: String = "None" {
+        // update draftColumn's selected table every time the user changes it
         didSet {
             if let id = DatabaseTable.ID(uuidString: selectedTable) {
-                draftColumn.type = .table
                 draftColumn.referencedTableID = id
             }
             else {
@@ -75,8 +84,8 @@ final class EditColumnModel: ViewModel {
         self.column = column
         self.draftColumn = column
         self.selectedType = column.type.rawValue
-        self.types = [ValueType.string.rawValue, ValueType.int.rawValue, ValueType.double.rawValue, ValueType.bool.rawValue, ValueType.table.rawValue]
         super.init(isEditing: isEditing)
+        
         if let table = referencedTable {
             self.selectedTable = table.id.uuidString
         }
@@ -85,6 +94,7 @@ final class EditColumnModel: ViewModel {
         }
     }
     
+    // all of the UUIDs of all tables in this database, to allow the user to pick which data type they want
     var tables: [String] {
         var ids: [String] = ["None"]
         if let table = SchemaDatabase.used.table(id: column.tableID) {
@@ -96,8 +106,9 @@ final class EditColumnModel: ViewModel {
         return ids
     }
 
-    let types: [String]
+    let types: [String] = [ValueType.string.rawValue, ValueType.int.rawValue, ValueType.double.rawValue, ValueType.bool.rawValue, ValueType.table.rawValue]
     
+    // which table the column is referencing, if any
     var referencedTable: DatabaseTable? {
         switch column.type {
         case .table:
@@ -119,7 +130,10 @@ final class EditColumnModel: ViewModel {
         }
         else {
             draftColumn = column
+            // default the selection to what's already selected
             selectedType = column.type.rawValue
+            
+            // default selectedTable to the table that the column references
             if let table = referencedTable {
                 selectedTable = table.id.uuidString
             }
@@ -153,14 +167,16 @@ struct EditColumn: View {
                 }
             }
             Section("Data Type") {
-                // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-a-picker-and-read-values-from-it
                 Picker("Data Type:", selection: $model.selectedType) {
                     ForEach(model.types, id: \.self) {
                         Text($0)
                     }
                 }
             }
-            if model.selectedType == ValueType.table.rawValue {
+            // if the user selected a table, show an additional table picker
+            // use a switch so it's easier to add cases for ints, strings, etc later
+            switch model.selectedType {
+            case ValueType.table.rawValue:
                 Section("Table") {
                     if model.tables == [] {
                         Text("No Tables")
@@ -180,6 +196,9 @@ struct EditColumn: View {
                         .pickerStyle(.wheel)
                     }
                 }
+            default:
+                // the compiler complains if I put a break or just "break" here, so I put this here instead
+                let _ = "break"
             }
         }
     }

@@ -79,18 +79,18 @@
 			children = (
 				00203CE729C8F68C00AC0240 /* Assets.xcassets */,
 				00203CE929C8F68C00AC0240 /* Preview Content */,
-				00348C1829CA00EB00B3E4B2 /* AppModel.swift */,
-				0047A68129CE63E9005E76EE /* ColumnView.swift */,
-				000104C729D6528600316B3A /* ColumnsView.swift */,
-				00203CE529C8F68A00AC0240 /* ContentView.swift */,
-				00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */,
-				00348C2429CA16A300B3E4B2 /* DatabaseView.swift */,
-				00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */,
 				00348C1A29CA01A400B3E4B2 /* DataModels.swift */,
 				004B127329E44C4900AEBCE2 /* GRDBDatabases.swift */,
-				00A565BE29F1FA9C005B8D8A /* RowView.swift */,
-				000104C529D6520800316B3A /* RowsView.swift */,
+				00348C1829CA00EB00B3E4B2 /* AppModel.swift */,
+				00203CE329C8F68A00AC0240 /* CS410_Final_ProjectApp.swift */,
+				00203CE529C8F68A00AC0240 /* ContentView.swift */,
+				00348C2229CA0A4600B3E4B2 /* DatabasesView.swift */,
+				00348C2429CA16A300B3E4B2 /* DatabaseView.swift */,
 				0080483129CA5A5F0074EAA0 /* TableView.swift */,
+				000104C729D6528600316B3A /* ColumnsView.swift */,
+				0047A68129CE63E9005E76EE /* ColumnView.swift */,
+				000104C529D6520800316B3A /* RowsView.swift */,
+				00A565BE29F1FA9C005B8D8A /* RowView.swift */,
 			);
 			path = "CS410 Final Project";
 			sourceTree = "<group>";

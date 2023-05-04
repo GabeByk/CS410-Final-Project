@@ -12,7 +12,7 @@ protocol RowSaver: AnyObject {
     func updateRow(_ row: DatabaseRow)
 }
 
-extension EditTableModel: RowSaver {
+extension EditRowsModel: RowSaver {
     func updateRow(_ row: DatabaseRow) {
         rows[id: row.id] = row
     }
@@ -23,88 +23,86 @@ final class EditRowModel: ViewModel {
     weak var parentModel: RowSaver?
     @Published var row: DatabaseRow
     @Published var values: IdentifiedArrayOf<ColumnValue>
-    var rowsByDescription: [String : DatabaseRow.ID]
     
     init(parentModel: RowSaver? = nil, row: DatabaseRow, isEditing: Bool = false) {
         self.parentModel = parentModel
         self.row = row
         self.values = []
-        self.rowsByDescription = [:]
         super.init(isEditing: isEditing)
         refreshValues(generatePickerOptions: isEditing)
     }
-    
+        
     func refreshValues(generatePickerOptions: Bool = true) {
         self.values = []
-        self.rowsByDescription = [:]
         // iterate over the columns in the schema database instead of row.values so they appear in the same order every time
         for column in SchemaDatabase.used.columnsFor(tableID: row.tableID) {
             if let storedValue = row.valueFor(columnID: column.id) {
                 switch storedValue {
                 case .row(let referencedRowID, let referencedTableID):
-                    // validValues should be an array of uuidStrings for each row in the referenced table
-                    var validValues: [String] = []
-                    var defaultValue: String? = nil
+                    // ids should be an array of uuidStrings for each row in the referenced table
+                    var ids: [String] = []
+                    // labels should be an array of descriptions for each item
+                    var labels: [String] = []
+                    let defaultValue: String? = referencedRowID?.description
                     if generatePickerOptions {
                         // if we were given a table ID
                         if let referencedTableID {
                             // and the table exists
                             if let schemaTable = SchemaDatabase.used.table(id: referencedTableID) {
-                                // get the database on disc that matches this table
+                                // get the database on disc that has this table
                                 let database = UserDatabase.discDatabaseFor(databaseID: schemaTable.databaseID)
                                 // get the rows for the table
                                 let rows = database.rowsFor(table: schemaTable)
                                 for row in rows {
+                                    ids.append(row.id.uuidString)
                                     // only fetch the description once
                                     let description = row.description
                                     // we need to give each row a unique string so we can figure out which one the user chose
                                     // if it isn't already in here, just use the description based on the primary key
-                                    if !validValues.contains(description) {
-                                        validValues.append(description)
-                                        rowsByDescription[description] = row.id
+                                    if !labels.contains(description) {
+                                        labels.append(description)
                                     }
                                     // if there are multiple items with the same primary key, we need some more information
                                     else {
                                         // count how many times we have a row with this data
                                         var count = 0
-                                        for validValue in validValues {
+                                        for validValue in labels {
                                             // if we already have something like Jane Smith (1), we want to get rid of the (1) we added, but not "Smith"
-                                            if validValue == row.description || validValue.split(separator: " ").dropLast().joined(separator: " ") == row.description {
+                                            if validValue == description || validValue.split(separator: " ").dropLast().joined(separator: " ") == description {
                                                 count += 1
                                             }
                                         }
-                                        validValues.append("\(row.description) (\(count))")
-                                        rowsByDescription[validValues.last!] = row.id
-                                    }
-                                    if row.id == referencedRowID {
-                                        defaultValue = validValues.last
+                                        labels.append("\(description) (\(count))")
                                     }
                                 }
                             }
                         }
                     }
+                    // if we weren't given a table ID, use some default values
                     else {
-                        validValues = ["NULL"]
+                        labels = ["NULL"]
+                        ids = ["NULL"]
                         if let referencedRowID, let referencedTableID {
+                            ids = [referencedRowID.uuidString]
                             if let table = SchemaDatabase.used.table(id: referencedTableID) {
                                 let database = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
-                                validValues = [database.row(rowID: referencedRowID, tableID: referencedTableID)?.description ?? "NULL"]
+                                labels = [database.row(rowID: referencedRowID, tableID: referencedTableID)?.description ?? "NULL"]
                             }
                         }
-                        defaultValue = validValues.first!
                     }
                     // if we have no rows, tell the user there aren't any
-                    if validValues.count == 0 {
-                        validValues = ["No rows to choose"]
+                    if labels.count == 0 {
+                        labels = ["No rows to choose"]
+                        ids = [referencedRowID?.uuidString ?? "NULL"]
                     }
                     
-                    self.values.append(ColumnValue(columnID: column.id, value: defaultValue, type: .picker(validValues)))
+                    self.values.append(ColumnValue(columnID: column.id, value: defaultValue, type: .picker(values: ids, labels: labels)))
                 case .int(let i):
                     self.values.append(ColumnValue(columnID: column.id, value: i, type: .textField))
                 case .string(let s):
                     self.values.append(ColumnValue(columnID: column.id, value: s, type: .textEditor))
                 case .bool(let b):
-                    self.values.append(ColumnValue(columnID: column.id, value: b == nil ? nil : (b! ? "True" : "False"), type: .picker(["True", "False"])))
+                    self.values.append(ColumnValue(columnID: column.id, value: b == nil ? nil : (b! ? "True" : "False"), type: .picker(values: ["True", "False"], labels: nil)))
                 case .double(let d):
                     self.values.append(ColumnValue(columnID: column.id, value: d, type: .textField))
                 }
@@ -114,12 +112,18 @@ final class EditRowModel: ViewModel {
     
     override func editButtonPressed() {
         if isEditing {
+            // save the changes the user made
             if let table = SchemaDatabase.used.table(id: row.tableID) {
+                // get the database the user is trying to edit
                 let discDatabase = UserDatabase.discDatabaseFor(databaseID: table.databaseID)
+                // for each column the user might have changed
                 for value in values {
+                    // figure out what value we should put in the database
                     let newValue: StoredValue
+                    // if the column exists, use its data type to figure out how we should do it
                     if let column = SchemaDatabase.used.column(id: value.id) {
                         switch column.type {
+                        // for most, we can just convert the given data to the correct data type
                         case .int:
                             if value.isNull {
                                 newValue = .int(nil)
@@ -149,35 +153,38 @@ final class EditRowModel: ViewModel {
                             else {
                                 newValue = .double(Double(value.value))
                             }
+                        // for tables, it's a little bit different
                         case .table:
                             if !value.isNull {
-                                let referencedRowID: DatabaseRow.ID? = rowsByDescription[value.value]
+                                // since value.value is a uuidString, we can construct a UUID from it
+                                let referencedRowID: DatabaseRow.ID? = DatabaseRow.ID(uuidString: value.value)
+                                // then we can just input the appropraite UUIDs
                                 newValue = .row(referencedRowID: referencedRowID, referencedTableID: column.referencedTableID)
                             }
                             else {
                                 newValue = .row(referencedRowID: nil, referencedTableID: column.referencedTableID)
                             }
                         }
+                        // now we just have to update the row's value with whatever value we got
                         row.updateValueFor(columnID: value.id, newValue: newValue)
                     }
                 }
+                // and propogate any changes to the database on disc
                 discDatabase.updateRow(row)
             }
+            // and propogate changes up the chain
             parentModel?.updateRow(row)
         }
         isEditing.toggle()
-        // if we exited editing (isEditing = false), we only want the currently selected options
-        // if we're entering editing (isEditing = true), we need all the data for the pickers
+        // if we exited editing (isEditing is now false), we only want the currently selected options
+        // if we're entering editing (isEditing is now true), we need all the data for the pickers
         refreshValues(generatePickerOptions: isEditing)
     }
     
     override func cancelButtonPressed() {
+        // discard any changes the user made and exit editing mode
         refreshValues()
-        isEditing.toggle()
-    }
-    
-    func valueFor(columnID: DatabaseColumn.ID) -> ColumnValue? {
-        return values[id: columnID]
+        isEditing = false
     }
 }
 
@@ -185,8 +192,9 @@ final class EditRowModel: ViewModel {
 enum ColumnType {
     case textField
     case textEditor
-    // the array of strings is the values to choose from in the picker
-    case picker([String])
+    // values is what the picker will choose from, and labels is what will be shown to the user
+    // if labels is nil, values will be shown directly
+    case picker(values: [String], labels: [String]?)
 }
 
 // reference typing so we can pass it in to the EditableColumnValueView and have it be edited
@@ -203,13 +211,30 @@ class ColumnValue: ObservableObject, Identifiable {
         self.isNull = value == nil
         switch type {
         // default the chosen option for a picker to the first chosen value, or empty if there isn't a first value
-        case let .picker(values):
+        case let .picker(values, _):
             self.value = value?.description ?? values.first ?? ""
         // default the entered value for a text field to be empty
         case .textField, .textEditor:
             self.value = value?.description ?? ""
         }
         self.type = type
+    }
+}
+
+extension ColumnValue: CustomStringConvertible {
+    // shorthand so users can easily display the label without having to deal with labels
+    var description: String {
+        switch self.type {
+        case let .picker(values, labels):
+            if let labels {
+                if let i = values.firstIndex(of: value) {
+                    return labels[i]
+                }
+            }
+            return value.description
+        default:
+            return value.description
+        }
     }
 }
 
@@ -222,7 +247,7 @@ struct ColumnValueView: View {
     
     var body: some View {
         Section(column?.name ?? "Unknown Column") {
-            Text(columnValue.isNull ? "NULL" : columnValue.value.description)
+            Text(columnValue.isNull ? "NULL" : columnValue.description)
         }
     }
 }
@@ -266,7 +291,8 @@ struct EditableColumnValueView: View {
         self.nullSelector = OptionHolder(option: defaultOption, didSetAction: updateColumnValue)
     }
     
-    func updateColumnValue(option: String) {        columnValue.isNull = option == EditableColumnValueView.nullOptions[0]
+    func updateColumnValue(option: String) {
+        columnValue.isNull = option == EditableColumnValueView.nullOptions[0]
     }
     
     var column: DatabaseColumn? {
@@ -283,18 +309,23 @@ struct EditableColumnValueView: View {
                 }
                 if nullSelector.option != EditableColumnValueView.nullOptions[0] {
                     switch columnValue.type {
-                    case let .picker(values):
+                    case let .picker(values, labels):
                         // TODO: slide-in/fullscreen picker
-                        Picker("Select Row UUID:", selection: $columnValue.value) {
+                        Picker("Choose an option:", selection: $columnValue.value) {
                             ForEach(values, id: \.self) { value in
-                                Text(value)
+                                if let labels {
+                                    if let i = values.firstIndex(of: value) {
+                                        Text(labels[i])
+                                    }
+                                    else {
+                                        Text(value)
+                                    }
+                                }
                             }
                         }
                     case .textField:
-                        // https://www.hackingwithswift.com/quick-start/swiftui/how-to-make-a-textfield-expand-vertically-as-the-user-types
                         TextField("Enter a value", text: $columnValue.value, axis: .vertical)
                     case .textEditor:
-                        // https://www.hackingwithswift.com/quick-start/swiftui/how-to-create-multi-line-editable-text-with-texteditor
                         TextEditor(text: $columnValue.value)
                     }
                 }

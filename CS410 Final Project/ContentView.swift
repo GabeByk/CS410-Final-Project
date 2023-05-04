@@ -9,7 +9,6 @@ import SwiftUI
 import IdentifiedCollections
 
 struct ContentView: View {
-    // from https://github.com/groue/GRDB.swift/blob/master/Documentation/DemoApps/GRDBAsyncDemo/GRDBAsyncDemo/Views/AppView.swift
     @ObservedObject var app: AppModel
     
     var body: some View {

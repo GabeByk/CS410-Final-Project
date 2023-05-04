@@ -8,8 +8,9 @@
 import SwiftUI
 import IdentifiedCollections
 
+// helper enum to determine if we should show the rows or the columns
 enum EditTableViewState {
-    case table
+    case rows
     case columns
 }
 
@@ -27,8 +28,9 @@ extension EditDatabaseModel: DatabaseTableSaver {
 }
 
 @MainActor
-final class EditDatabaseTableModel: ObservableObject {
+final class EditTableModel: ObservableObject {
     weak var parentModel: DatabaseTableSaver?
+    // we only need this so we can pass it to both the EditColumnsModel and the EditRowsModel
     @Published var table: DatabaseTable
     @Published var state: EditTableViewState
     
@@ -39,8 +41,9 @@ final class EditDatabaseTableModel: ObservableObject {
     }
 }
 
-extension EditDatabaseTableModel: Equatable, Hashable {
-    nonisolated static func == (lhs: EditDatabaseTableModel, rhs: EditDatabaseTableModel) -> Bool {
+// an EditTableModel isn't a ViewModel, so we need to write equatable and hashable conformance
+extension EditTableModel: Equatable, Hashable {
+    nonisolated static func == (lhs: EditTableModel, rhs: EditTableModel) -> Bool {
         return lhs === rhs
     }
     
@@ -50,14 +53,14 @@ extension EditDatabaseTableModel: Equatable, Hashable {
 }
 
 struct EditTable: View {
-    @ObservedObject var model: EditDatabaseTableModel
+    @ObservedObject var model: EditTableModel
 
     var body: some View {
         switch model.state {
         case .columns:
             EditColumnsView(model: EditColumnsModel(parentModel: model, table: model.table))
-        case .table:
-            EditTableView(model: EditTableModel(parentModel: model, table: model.table))
+        case .rows:
+            EditRows(model: EditRowsModel(parentModel: model, table: model.table))
         }
     }
 }

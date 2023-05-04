@@ -16,10 +16,11 @@ protocol DatabaseSaver: AnyObject {
 
 extension EditDatabasesModel: DatabaseSaver {
     func updateDatabase(database: Database) {
+        // update our local view to reflect any changes
         self.draftDatabases[id: database.id] = database
         // we may need to update the database (e.g. the name might have changed)
         SchemaDatabase.used.updateDatabase(database)
-        // we updated the database, so the parentModel doesn't need to
+        // we updated the database, so parentModel doesn't need to
         parentModel?.updateDatabases(databases: draftDatabases, updateSchemaDatabase: false)
     }
 }
@@ -42,7 +43,7 @@ final class EditDatabaseModel: ViewModel {
     override func editButtonPressed() {
         // if we're exiting editing mode, update the database
         if isEditing {
-            // database.tables is a computed property that returns all of the tables for this database currently stored in SchemaDatabase.shared
+            // for each table that the schema database has
             for table in SchemaDatabase.used.tablesFor(databaseID: database.id) {
                 // if we both have a table of this id, update the database to have our version
                 if let updatedTable = tables[id: table.id] {
@@ -59,6 +60,7 @@ final class EditDatabaseModel: ViewModel {
             for table in tables {
                 SchemaDatabase.used.addTable(table)
             }
+            // propogate changes to the database
             parentModel?.updateDatabase(database: database)
         }
         // I would think that I only need to set this when entering edit mode, but for some reason not setting it when exiting edit mode causes a crash when renaming an empty table. Similarly, adding this line to cancelButtonPressed causes a crash when cancelling adding a table with a non-empty name.
@@ -76,15 +78,14 @@ final class EditDatabaseModel: ViewModel {
     }
     
     func addTable() {
-        let table = DatabaseTable.empty(databaseID: database.id)
-        tables.append(table)
+        tables.append(.empty(databaseID: database.id))
     }
     
     func removeTables(at offsets: IndexSet) {
         tables.remove(atOffsets: offsets)
     }
     
-    /// - returns: true if there are no unhidden tables, false otherwise
+    /// - returns: true if every table is hidden, false otherwise
     func allTablesHidden() -> Bool {
         for table in SchemaDatabase.used.tablesFor(databaseID: database.id) {
             if table.shouldShow {
@@ -143,7 +144,7 @@ struct EditDatabase: View {
             Section("Tables") {
                 ForEach(SchemaDatabase.used.tablesFor(databaseID: model.database.id)) { table in
                     if table.shouldShow {
-                        NavigationLink(value: NavigationPathCase.table(EditDatabaseTableModel(parentModel: model, table: table))) {
+                        NavigationLink(value: NavigationPathCase.table(EditTableModel(parentModel: model, table: table))) {
                             Text(table.name)
                         }
                     }

@@ -13,14 +13,14 @@ protocol ColumnsSaver: AnyObject {
     func exitColumnsView()
 }
 
-extension EditDatabaseTableModel: ColumnsSaver {
+extension EditTableModel: ColumnsSaver {
     func updateTable(_ table: DatabaseTable) {
         self.table = table
         parentModel?.updateTable(table: table)
     }
     
     func exitColumnsView() {
-        state = .table
+        state = .rows
     }
 }
 
@@ -68,6 +68,7 @@ final class EditColumnsModel: ViewModel {
     }
     
     override func cancelButtonPressed() {
+        // just setting self.table = table seems to cause a runtime warning, so only update the instance variables we need
         if let table = SchemaDatabase.used.table(id: self.table.id) {
             self.table.name = table.name
             self.table.shouldShow = table.shouldShow
@@ -76,8 +77,7 @@ final class EditColumnsModel: ViewModel {
     }
     
     func addColumn() {
-        let column: DatabaseColumn = .empty(tableID: table.id)
-        columns.append(column)
+        columns.append(.empty(tableID: table.id))
     }
     
     func removeColumns(at offsets: IndexSet) {
@@ -146,8 +146,6 @@ struct EditColumnsView: View {
                         Spacer()
                         model.table.shouldShowImage
                     }
-                    // the button shouldn't be at the bottom of the screen
-                    // https://stackoverflow.com/questions/74407838/why-am-i-getting-this-systemgesturegate-0x102210320-gesture-system-gesture
                     Button("View Rows") {
                         model.viewTablePressed()
                     }
