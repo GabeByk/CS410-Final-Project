@@ -69,7 +69,6 @@ final class EditDatabaseModel: ViewModel {
     }
     
     override func cancelButtonPressed() {
-        // TODO: runtime warning sometimes appears when reverting changes to tables: [SwiftUI] Publishing changes from within view updates is not allowed, this will cause undefined behavior.
         // discard the changes by fetching the data stored on disc
         if let database = SchemaDatabase.used.database(id: self.database.id) {
             self.database.name = database.name

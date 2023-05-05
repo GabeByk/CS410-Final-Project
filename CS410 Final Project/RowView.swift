@@ -102,7 +102,7 @@ final class EditRowModel: ViewModel {
                 case .string(let s):
                     self.values.append(ColumnValue(columnID: column.id, value: s, type: .textEditor))
                 case .bool(let b):
-                    self.values.append(ColumnValue(columnID: column.id, value: b == nil ? nil : (b! ? "True" : "False"), type: .picker(values: ["True", "False"], labels: nil)))
+                    self.values.append(ColumnValue(columnID: column.id, value: b?.description.capitalized, type: .picker(values: ["True", "False"], labels: nil)))
                 case .double(let d):
                     self.values.append(ColumnValue(columnID: column.id, value: d, type: .textField))
                 }
@@ -309,8 +309,8 @@ struct EditableColumnValueView: View {
                 }
                 if nullSelector.option != EditableColumnValueView.nullOptions[0] {
                     switch columnValue.type {
+                    // TODO: True/False doesn't work
                     case let .picker(values, labels):
-                        // TODO: slide-in/fullscreen picker
                         Picker("Choose an option:", selection: $columnValue.value) {
                             ForEach(values, id: \.self) { value in
                                 if let labels {
@@ -320,6 +320,9 @@ struct EditableColumnValueView: View {
                                     else {
                                         Text(value)
                                     }
+                                }
+                                else {
+                                    Text(value)
                                 }
                             }
                         }

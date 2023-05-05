@@ -118,7 +118,6 @@ struct EditColumnsView: View {
                         Button {
                             column.isPrimary.toggle()
                         } label: {
-                            // TODO?: have a pop-up tutorial type thing about what a primary key is, etc
                             column.primaryKeyImage
                         }
                         .buttonStyle(.borderless)
