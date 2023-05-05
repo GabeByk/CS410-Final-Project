@@ -8,7 +8,6 @@
 import Foundation
 import IdentifiedCollections
 
-// TODO: cases for columns and rows?
 enum NavigationPathCase: Equatable, Hashable {
     case database(EditDatabaseModel)
     case table(EditTableModel)

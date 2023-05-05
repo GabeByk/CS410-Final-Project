@@ -407,9 +407,9 @@ struct SchemaDatabase {
 
 extension SchemaDatabase {
     /// The database the application uses to store the schema. For your own directory/sqlite file, mimic makeDefaultDatabase and set this variable equal to it.
-    static var used = makeDefaultDatabase()
+    static var used = makeDefaultDatabase() ?? .empty()
 
-    private static func makeDefaultDatabase() -> SchemaDatabase {
+    private static func makeDefaultDatabase() -> SchemaDatabase? {
         do {
             // Pick a folder for storing the SQLite database, as well as
             // the various temporary files created during normal database
@@ -437,16 +437,8 @@ extension SchemaDatabase {
             
             return appDatabase
         } catch {
-            // TODO: Replace this implementation with code to handle the error appropriately.
-            // fatalError() causes the application to generate a crash log and terminate.
-            //
-            // Typical reasons for an error here include:
-            // * The parent directory cannot be created, or disallows writing.
-            // * The database is not accessible, due to permissions or data protection when the device is locked.
-            // * The device is out of space.
-            // * The database could not be migrated to its latest schema version.
-            // Check the error message to determine what the actual problem was.
-            fatalError("Unresolved error \(error)")
+            print(error)
+            return nil
         }
     }
 
@@ -485,9 +477,23 @@ struct UserDatabase {
             return database
         }
         catch {
-            // TODO: Replace this implementation with code to handle the error appropriately.
-            fatalError("Unresolved error \(error)")
+            // Typical reasons for an error here include:
+            // * The parent directory cannot be created, or disallows writing.
+            // * The database is not accessible, due to permissions or data protection when the device is locked.
+            // * The device is out of space.
+            // * The database could not be migrated to its latest schema version.
+            // Check the error message to determine what the actual problem was.
+            print(error)
+            return .empty(databaseID: id)
         }
+    }
+    
+    /// Creates an empty database for SwiftUI previews
+    static func empty(databaseID id: Database.ID) -> UserDatabase {
+        // Connect to an in-memory database
+        // See https://swiftpackageindex.com/groue/grdb.swift/documentation/grdb/databaseconnections
+        let dbQueue = try! DatabaseQueue()
+        return UserDatabase(databaseID: id, dbQueue)
     }
     
     /// removes all data for the specified database from the disc
@@ -662,8 +668,8 @@ struct UserDatabase {
                 try db.execute(sql: "DELETE FROM '\(row.tableID)' WHERE id = ?", arguments: [row.id.databaseValue])
             }
         } catch {
-            // TODO: show pop-up saying delete failed ("FOREIGN KEY constraint failed - while executing ...")
-            // something like "Cannot delete row [abc], [def] in table [ghi] uses it"
+            // sometimes an error can happen that prevents it from being deleted (e.g. "FOREIGN KEY constraint failed - while executing ...")
+            // a popup with something like "Cannot delete row [abc], [def] in table [ghi] uses it" would be nice to add
             print(error)
         }
     }
@@ -765,8 +771,7 @@ struct UserDatabase {
             if oldColumn.type != newColumn.type ||
                 // we also want to update the table if we changed which table the column is referencing
                 (oldColumn.type == newColumn.type && newColumn.type == .table && oldColumn.referencedTableID != newColumn.referencedTableID) {
-                // TODO: is there a better way to update the column (e.g. to change the data type)? I don't think there is
-                // TODO: try to convert the data in existing rows for this column to the new data type, except for .table
+                // I don't think there's a better way to alter a table to change the data type of a column, but we could save the old data and try to convert it to the new data type
                 removeColumn(newColumn)
                 addColumn(newColumn)
             }
