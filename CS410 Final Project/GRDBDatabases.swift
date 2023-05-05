@@ -437,6 +437,14 @@ extension SchemaDatabase {
             
             return appDatabase
         } catch {
+            // TODO: Replace this implementation with code to handle the error appropriately.
+            //
+            // Typical reasons for an error here include:
+            // * The parent directory cannot be created, or disallows writing.
+            // * The database is not accessible, due to permissions or data protection when the device is locked.
+            // * The device is out of space.
+            // * The database could not be migrated to its latest schema version.
+            // Check the error message to determine what the actual problem was.
             print(error)
             return nil
         }
@@ -477,6 +485,8 @@ struct UserDatabase {
             return database
         }
         catch {
+            // TODO: Replace this implementation with code to handle the error appropriately.
+            //
             // Typical reasons for an error here include:
             // * The parent directory cannot be created, or disallows writing.
             // * The database is not accessible, due to permissions or data protection when the device is locked.

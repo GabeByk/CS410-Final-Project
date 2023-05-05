@@ -182,6 +182,7 @@ struct EditColumn: View {
                         Text("No Tables")
                     }
                     else {
+                        // TODO: have this come in on a sheet when a button is pressed so the picker is fullscreen?
                         Picker("Table:", selection: $model.selectedTable) {
                             ForEach(model.tables, id:\.self) { rowID in
                                 if let id = DatabaseTable.ID(uuidString: rowID) {

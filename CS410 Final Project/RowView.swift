@@ -309,7 +309,6 @@ struct EditableColumnValueView: View {
                 }
                 if nullSelector.option != EditableColumnValueView.nullOptions[0] {
                     switch columnValue.type {
-                    // TODO: True/False doesn't work
                     case let .picker(values, labels):
                         Picker("Choose an option:", selection: $columnValue.value) {
                             ForEach(values, id: \.self) { value in
